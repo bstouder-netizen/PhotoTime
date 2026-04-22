@@ -1,65 +1,78 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   return (
-    <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top }]}>
-
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.userName}>User Name</Text>
-        <View style={styles.picCircle}>
-          <Text style={styles.picLabel}>PIC</Text>
+    <View style={styles.screen}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.container, { paddingTop: insets.top }]}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.userName}>User Name</Text>
+          <View style={styles.picCircle}>
+            <Text style={styles.picLabel}>PIC</Text>
+          </View>
         </View>
-      </View>
 
-      {/* Photographers Near You */}
-      <View style={styles.sectionBanner}>
-        <Text style={styles.sectionBannerText}>PHOTOGRAPHERS NEAR YOU</Text>
-      </View>
+        {/* Photographers Near You */}
+        <View style={styles.sectionBanner}>
+          <Text style={styles.sectionBannerText}>PHOTOGRAPHERS NEAR YOU</Text>
+        </View>
 
-      {/* Featured Photographer (Photographer of the Month) */}
-      <View style={styles.featuredCard}>
-        <Image
-          source={require('../assets/photographer_of_month.png')}
-          style={styles.featuredImage}
-          resizeMode="contain"
-        />
-        <Text style={styles.featuredLabel}>FEATURED PHOTOGRAPHER</Text>
-      </View>
-
-      {/* Job Referral + New Scouted Location side by side */}
-      <View style={styles.row}>
-        <View style={[styles.halfCard, styles.halfCardLeft]}>
+        {/* Featured Photographer */}
+        <View style={styles.featuredCard}>
           <Image
-            source={require('../assets/job_referral.png')}
-            style={styles.halfImage}
+            source={require('../assets/photographer_of_month.png')}
+            style={styles.featuredImage}
             resizeMode="contain"
           />
-          <Text style={styles.halfLabel}>JOB REFERRAL</Text>
+          <Text style={styles.featuredLabel}>FEATURED PHOTOGRAPHER</Text>
         </View>
-        <View style={[styles.halfCard, styles.halfCardRight]}>
-          <Image
-            source={require('../assets/scouted_location.png')}
-            style={styles.halfImage}
-            resizeMode="contain"
-          />
-          <Text style={styles.halfLabel}>NEW SCOUTED LOCATION</Text>
-        </View>
-      </View>
 
-    </ScrollView>
+        {/* Job Referral + New Scouted Location */}
+        <View style={styles.row}>
+          <View style={[styles.halfCard, styles.halfCardLeft]}>
+            <Image source={require('../assets/job_referral.png')} style={styles.halfImage} resizeMode="contain" />
+            <Text style={styles.halfLabel}>JOB REFERRAL</Text>
+          </View>
+          <View style={[styles.halfCard, styles.halfCardRight]}>
+            <Image source={require('../assets/scouted_location.png')} style={styles.halfImage} resizeMode="contain" />
+            <Text style={styles.halfLabel}>NEW SCOUTED LOCATION</Text>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* STORE / LEARN / SHARE — in flow, sits above tab bar */}
+      <View style={[styles.actionBar, { marginBottom: 24 }]}>
+        <TouchableOpacity style={styles.actionButton} onPress={() => {}}>
+          <Image source={require('../assets/store.png')} style={styles.actionIcon} resizeMode="contain" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionButton} onPress={() => {}}>
+          <Image source={require('../assets/learn.png')} style={styles.actionIcon} resizeMode="contain" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionButton} onPress={() => {}}>
+          <Image source={require('../assets/share_app.png')} style={styles.actionIcon} resizeMode="contain" />
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    paddingBottom: 100,
+  screen: {
+    flex: 1,
     backgroundColor: '#f2f2f2',
-    paddingTop: 0,
+  },
+  scroll: {
+    flex: 1,
+  },
+  container: {
+    paddingBottom: 16,
+    backgroundColor: '#f2f2f2',
   },
   header: {
     flexDirection: 'row',
@@ -125,7 +138,6 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     marginHorizontal: 12,
-    marginTop: 0,
     gap: 12,
   },
   halfCard: {
@@ -152,5 +164,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     color: '#333',
     textAlign: 'center',
+  },
+  actionBar: {
+    flexDirection: 'row',
+    marginHorizontal: 8,
+    gap: 4,
+    height: 110,
+  },
+  actionButton: {
+    flex: 1,
+  },
+  actionIcon: {
+    width: '100%',
+    height: '100%',
   },
 });

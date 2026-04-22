@@ -1,5 +1,5 @@
-import React from 'react';
-import { View } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, Animated, StyleSheet, TouchableOpacity } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 
@@ -26,6 +26,75 @@ const INACTIVE_COLOR = '#222';
 const ICON_SIZE = 30;
 const CIRCLE_SIZE = 52;
 
+const TAB_LABELS: Record<string, string> = {
+  Home: 'Home',
+  Locations: 'Locations',
+  Shoots: 'Shoots',
+  Search: 'Search',
+  Portfolio: 'Portfolio',
+};
+
+function TooltipButton({
+  label,
+  onPress,
+  children,
+}: {
+  label: string;
+  onPress: () => void;
+  children: React.ReactNode;
+}) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const [visible, setVisible] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showTooltip = () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    setVisible(true);
+    Animated.timing(opacity, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+    hideTimer.current = setTimeout(() => {
+      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }).start(() =>
+        setVisible(false),
+      );
+    }, 1500);
+  };
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onLongPress={showTooltip}
+      activeOpacity={0.7}
+      style={styles.buttonWrapper}
+    >
+      {visible && (
+        <Animated.View style={[styles.tooltip, { opacity }]}>
+          <Text style={styles.tooltipText}>{label}</Text>
+        </Animated.View>
+      )}
+      {children}
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  buttonWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tooltip: {
+    position: 'absolute',
+    bottom: CIRCLE_SIZE + 8,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    zIndex: 100,
+  },
+  tooltipText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+});
 
 function PortfolioTabIcon({ focused }: { focused: boolean }) {
   const color = focused ? ACTIVE_COLOR : INACTIVE_COLOR;
@@ -140,6 +209,14 @@ export default function MainNavigator() {
             elevation: 0,
             shadowOpacity: 0,
           },
+          tabBarButton: (props) => (
+            <TooltipButton
+              label={TAB_LABELS[route.name] ?? route.name}
+              onPress={props.onPress as () => void}
+            >
+              {props.children}
+            </TooltipButton>
+          ),
           tabBarIcon: ({ focused }) => {
             switch (route.name) {
               case 'Home':
