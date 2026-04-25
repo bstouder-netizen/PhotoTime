@@ -17,6 +17,8 @@ end
 target 'PhotoTimeApp' do
   config = use_native_modules!
   pod 'RNWorklets', :path => '../node_modules/react-native-worklets'
+  pod 'FirebaseMessaging'
+  pod 'GoogleUtilities', :modular_headers => true
 
   use_react_native!(
     :path => config[:reactNativePath],

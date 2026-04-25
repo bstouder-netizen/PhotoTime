@@ -1,30 +1,60 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, Animated, StyleSheet, TouchableOpacity } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import { GlassBg } from './components/Glass';
 
 const AppTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    background: '#f2f2f2',
-    card: '#f2f2f2',
+    background: 'transparent',
+    card: 'transparent',
   },
 };
 import HomeScreen from './screens/HomeScreen';
+import ProfileScreen from './screens/ProfileScreen';
 import LocationsScreen from './screens/LocationsScreen';
 import ShootsScreen from './screens/ShootsScreen';
+import PostJobScreen from './screens/PostJobScreen';
+import JobOpeningsScreen from './screens/JobOpeningsScreen';
 import SearchScreen from './screens/SearchScreen';
 import PortfolioScreen from './screens/PortfolioScreen';
+import ComingSoonScreen from './screens/ComingSoonScreen';
+import SunsetCalculatorScreen from './screens/SunsetCalculatorScreen';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 const Tab = createBottomTabNavigator();
+const HomeStack = createNativeStackNavigator();
+const ShootsStack = createNativeStackNavigator();
 
-const ACTIVE_COLOR = '#2196f3';
-const INACTIVE_COLOR = '#222';
-const ICON_SIZE = 30;
-const CIRCLE_SIZE = 52;
+function HomeStackScreen() {
+  return (
+    <HomeStack.Navigator screenOptions={{ headerShown: false }}>
+      <HomeStack.Screen name="HomeMain" component={HomeScreen} />
+      <HomeStack.Screen name="Profile" component={ProfileScreen} />
+      <HomeStack.Screen name="ComingSoon" component={ComingSoonScreen} />
+      <HomeStack.Screen name="SunsetCalculator" component={SunsetCalculatorScreen} />
+    </HomeStack.Navigator>
+  );
+}
+
+function ShootsStackScreen() {
+  return (
+    <ShootsStack.Navigator screenOptions={{ headerShown: false }}>
+      <ShootsStack.Screen name="ShootsMain" component={ShootsScreen} />
+      <ShootsStack.Screen name="PostJob" component={PostJobScreen} />
+      <ShootsStack.Screen name="JobOpenings" component={JobOpeningsScreen} />
+    </ShootsStack.Navigator>
+  );
+}
+
+const ACTIVE_COLOR = '#1C1C1E';
+const INACTIVE_COLOR = '#FFFFFF';
+const ICON_SIZE = 26;
+const CIRCLE_SIZE = 44;
 
 const TAB_LABELS: Record<string, string> = {
   Home: 'Home',
@@ -78,7 +108,9 @@ function TooltipButton({
 const styles = StyleSheet.create({
   buttonWrapper: {
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 16,
+    flex: 1,
   },
   tooltip: {
     position: 'absolute',
@@ -196,19 +228,23 @@ function HomeTabIcon({ focused }: { focused: boolean }) {
 
 export default function MainNavigator() {
   return (
-    <NavigationContainer theme={AppTheme}>
-      <Tab.Navigator
-        screenOptions={({ route }) => ({
-          tabBarShowLabel: false,
-          headerShown: false,
-          tabBarBackground: () => null,
-          tabBarStyle: {
-            height: 80,
-            backgroundColor: 'transparent',
-            borderTopWidth: 0,
-            elevation: 0,
-            shadowOpacity: 0,
-          },
+    <GlassBg>
+      <NavigationContainer theme={AppTheme}>
+        <Tab.Navigator
+          screenOptions={({ route }) => ({
+            tabBarShowLabel: false,
+            headerShown: false,
+            tabBarStyle: {
+              height: 90,
+              backgroundColor: 'transparent',
+              borderTopWidth: 0,
+              elevation: 0,
+              shadowOpacity: 0,
+              position: 'absolute',
+            },
+            tabBarItemStyle: {
+              width: 70,
+            },
           tabBarButton: (props) => (
             <TooltipButton
               label={TAB_LABELS[route.name] ?? route.name}
@@ -237,12 +273,13 @@ export default function MainNavigator() {
           tabBarInactiveTintColor: INACTIVE_COLOR,
         })}
       >
-        <Tab.Screen name="Home" component={HomeScreen} />
+        <Tab.Screen name="Home" component={HomeStackScreen} />
         <Tab.Screen name="Locations" component={LocationsScreen} />
-        <Tab.Screen name="Shoots" component={ShootsScreen} />
+        <Tab.Screen name="Shoots" component={ShootsStackScreen} />
         <Tab.Screen name="Search" component={SearchScreen} />
         <Tab.Screen name="Portfolio" component={PortfolioScreen} />
-      </Tab.Navigator>
-    </NavigationContainer>
+        </Tab.Navigator>
+      </NavigationContainer>
+    </GlassBg>
   );
 }

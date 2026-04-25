@@ -1,0 +1,790 @@
+import React, { useEffect, useState } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  ScrollView, ActivityIndicator, Alert, Image, Linking, Switch, Modal,
+} from 'react-native';
+import { launchImageLibrary } from 'react-native-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '../lib/supabase';
+import { getDeviceId } from '../lib/deviceId';
+import { GlassPanel, GLASS } from '../components/Glass';
+
+const DEFAULT_LOCATION_PHOTO = 'https://picsum.photos/seed/photolocation/600/400';
+
+type ProfileLocation = {
+  id: string;
+  name: string;
+  description?: string;
+  address?: string;
+  photo_url?: string;
+  created_at: string;
+};
+
+type Endorsement = {
+  id: string;
+  endorser_name: string;
+  text: string;
+  created_at: string;
+};
+
+type Profile = {
+  id?: string;
+  device_id: string;
+  username: string;
+  person_name: string;
+  business_name: string;
+  profile_pic: string;
+  location: string;
+  zip_code: string;
+  email?: string;
+  email_public?: boolean;
+  website?: string;
+  portfolio_1?: string;
+  portfolio_2?: string;
+  portfolio_3?: string;
+  portfolio_4?: string;
+  portfolio_5?: string;
+};
+
+const EMPTY = {
+  username: '', person_name: '', business_name: '', profile_pic: '',
+  location: '', zip_code: '', email: '', email_public: false, website: '',
+};
+
+export default function ProfileScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [form, setForm] = useState({ ...EMPTY });
+  const [localImageUri, setLocalImageUri] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState<'info' | 'portfolio' | 'endorsements' | 'locations'>('info');
+  const [portfolioPics, setPortfolioPics] = useState<(string | null)[]>([null, null, null, null, null]);
+  const [portfolioUploading, setPortfolioUploading] = useState<boolean[]>([false, false, false, false, false]);
+  const [endorsements, setEndorsements] = useState<Endorsement[]>([]);
+  const [endorseModalVisible, setEndorseModalVisible] = useState(false);
+  const [endorseText, setEndorseText] = useState('');
+  const [endorseSubmitting, setEndorseSubmitting] = useState(false);
+  const [currentDeviceId, setCurrentDeviceId] = useState('');
+  const [profileLocations, setProfileLocations] = useState<ProfileLocation[]>([]);
+  const [locModalVisible, setLocModalVisible] = useState(false);
+  const [locName, setLocName] = useState('');
+  const [locDescription, setLocDescription] = useState('');
+  const [locAddress, setLocAddress] = useState('');
+  const [locSaving, setLocSaving] = useState(false);
+  const [locPhotoUri, setLocPhotoUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchProfile();
+    getDeviceId().then(id => {
+      setCurrentDeviceId(id);
+      fetchEndorsements(id);
+      fetchProfileLocations(id);
+    });
+  }, []);
+
+  const fetchProfileLocations = async (deviceId: string) => {
+    const { data } = await supabase
+      .from('scouted_locations')
+      .select('id, name, description, address, photo_url, created_at')
+      .eq('device_id', deviceId)
+      .order('created_at', { ascending: false });
+    if (data) setProfileLocations(data);
+  };
+
+  const handleAddLocation = async () => {
+    if (!locName.trim()) { Alert.alert('Required', 'Location name is required.'); return; }
+    setLocSaving(true);
+    let lat = 0;
+    let lng = 0;
+    if (locAddress.trim()) {
+      try {
+        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(locAddress.trim())}&limit=1`);
+        const json = await res.json();
+        const features = json?.features;
+        if (features?.length > 0) {
+          [lng, lat] = features[0].geometry.coordinates;
+        }
+      } catch { /* geocode failed, save without coords */ }
+    }
+    let photoUrl: string | null = null;
+    if (locPhotoUri) {
+      try {
+        const fileName = `locations/${currentDeviceId}_${Date.now()}.jpg`;
+        const blob = await (await fetch(locPhotoUri)).blob();
+        const arrayBuffer = await new Response(blob).arrayBuffer();
+        const { error: upErr } = await supabase.storage
+          .from('avatars').upload(fileName, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
+        if (!upErr) {
+          photoUrl = supabase.storage.from('avatars').getPublicUrl(fileName).data.publicUrl;
+        }
+      } catch { /* upload failed, proceed without photo */ }
+    }
+    const { error } = await supabase.from('scouted_locations').insert([{
+      name: locName.trim(),
+      description: locDescription.trim() || null,
+      address: locAddress.trim() || null,
+      latitude: lat,
+      longitude: lng,
+      photo_url: photoUrl,
+      device_id: currentDeviceId,
+      posted_by: profile?.username ?? '',
+    }]);
+    setLocSaving(false);
+    if (error) { Alert.alert('Error', error.message); return; }
+    setLocName(''); setLocDescription(''); setLocAddress(''); setLocPhotoUri(null);
+    setLocModalVisible(false);
+    fetchProfileLocations(currentDeviceId);
+  };
+
+  const pickLocPhoto = () => {
+    launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async response => {
+      if (response.didCancel || response.errorCode) return;
+      const asset = response.assets?.[0];
+      if (!asset?.uri) return;
+      setLocPhotoUri(asset.uri);
+    });
+  };
+
+  const handleDeleteLocation = (id: string) => {
+    Alert.alert('Delete Location', 'Remove this location from your profile?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        await supabase.from('scouted_locations').delete().eq('id', id);
+        fetchProfileLocations(currentDeviceId);
+      }},
+    ]);
+  };
+
+  const fetchEndorsements = async (deviceId: string) => {
+    const { data } = await supabase
+      .from('endorsements')
+      .select('id, endorser_name, text, created_at')
+      .eq('profile_device_id', deviceId)
+      .order('created_at', { ascending: false });
+    if (data) setEndorsements(data);
+  };
+
+  const handleEndorse = async () => {
+    if (!endorseText.trim()) { Alert.alert('Required', 'Please write something before submitting.'); return; }
+    setEndorseSubmitting(true);
+    const endorserName = (await supabase.from('profiles').select('username').eq('device_id', currentDeviceId).single()).data?.username ?? 'Anonymous';
+    const { error } = await supabase.from('endorsements').insert([{
+      profile_device_id: currentDeviceId,
+      endorser_device_id: currentDeviceId,
+      endorser_name: endorserName,
+      text: endorseText.trim(),
+    }]);
+    setEndorseSubmitting(false);
+    if (error) { Alert.alert('Error', error.message); return; }
+    setEndorseText('');
+    setEndorseModalVisible(false);
+    fetchEndorsements(currentDeviceId);
+  };
+
+  const fetchProfile = async () => {
+    setLoading(true);
+    const deviceId = await getDeviceId();
+    const { data } = await supabase.from('profiles').select('*').eq('device_id', deviceId).single();
+    if (data) {
+      setProfile(data);
+      setForm({
+        username: data.username ?? '', person_name: data.person_name ?? '',
+        business_name: data.business_name ?? '', profile_pic: data.profile_pic ?? '',
+        location: data.location ?? '', zip_code: data.zip_code ?? '',
+        email: data.email ?? '', email_public: data.email_public ?? false,
+        website: data.website ?? '',
+      });
+      setPortfolioPics([
+        data.portfolio_1 || null, data.portfolio_2 || null, data.portfolio_3 || null,
+        data.portfolio_4 || null, data.portfolio_5 || null,
+      ]);
+    }
+    setLoading(false);
+  };
+
+  const pickImage = () => {
+    launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async response => {
+      if (response.didCancel || response.errorCode) return;
+      const asset = response.assets?.[0];
+      if (!asset?.uri) return;
+      setLocalImageUri(asset.uri);
+      const deviceId = await getDeviceId();
+      const fileName = `${deviceId}.jpg`;
+      const blob = await (await fetch(asset.uri)).blob();
+      const arrayBuffer = await new Response(blob).arrayBuffer();
+      const { error: uploadError } = await supabase.storage
+        .from('avatars').upload(fileName, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
+      if (uploadError) { Alert.alert('Upload failed', uploadError.message); return; }
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
+      setForm(f => ({ ...f, profile_pic: urlData.publicUrl }));
+    });
+  };
+
+  const pickPortfolioImage = (index: number) => {
+    launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async response => {
+      if (response.didCancel || response.errorCode) return;
+      const asset = response.assets?.[0];
+      if (!asset?.uri) return;
+      setPortfolioUploading(prev => { const n = [...prev]; n[index] = true; return n; });
+      try {
+        const deviceId = await getDeviceId();
+        const fileName = `portfolio/${deviceId}_${index + 1}.jpg`;
+        const blob = await (await fetch(asset.uri)).blob();
+        const arrayBuffer = await new Response(blob).arrayBuffer();
+        const { error: uploadError } = await supabase.storage
+          .from('avatars').upload(fileName, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
+        if (uploadError) { Alert.alert('Upload failed', uploadError.message); return; }
+        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
+        const newUrl = urlData.publicUrl;
+        setPortfolioPics(prev => { const n = [...prev]; n[index] = newUrl; return n; });
+        const { error: dbError } = await supabase.from('profiles')
+          .update({ [`portfolio_${index + 1}`]: newUrl }).eq('device_id', deviceId);
+        if (dbError) Alert.alert('Save failed', dbError.message);
+      } finally {
+        setPortfolioUploading(prev => { const n = [...prev]; n[index] = false; return n; });
+      }
+    });
+  };
+
+  const handleSave = async () => {
+    if (!form.username.trim()) { Alert.alert('Required', 'User Name is required.'); return; }
+    setSaving(true);
+    const deviceId = await getDeviceId();
+    const payload = { ...form, device_id: deviceId };
+    let error;
+    if (profile?.id) {
+      ({ error } = await supabase.from('profiles').update(payload).eq('id', profile.id));
+    } else {
+      ({ error } = await supabase.from('profiles').insert([payload]));
+    }
+    setSaving(false);
+    if (error) { Alert.alert('Error', error.message); }
+    else { setLocalImageUri(null); await fetchProfile(); setEditing(false); }
+  };
+
+  const avatarUri = localImageUri || form.profile_pic || null;
+
+  if (loading) {
+    return (
+      <View style={[styles.screen, { paddingTop: insets.top }]}>
+        <Header navigation={navigation} />
+        <View style={styles.center}><ActivityIndicator size="large" color={GLASS.accent} /></View>
+      </View>
+    );
+  }
+
+  if (!profile && !editing) {
+    return (
+      <View style={[styles.screen, { paddingTop: insets.top }]}>
+        <Header navigation={navigation} />
+        <View style={styles.center}>
+          <GlassPanel style={styles.noProfileCard}>
+            <View style={styles.avatarCircle}><Text style={styles.avatarLabel}>PIC</Text></View>
+            <Text style={styles.noProfileText}>No Profile</Text>
+            <Text style={styles.subtext}>Set up your profile to get started.</Text>
+            <TouchableOpacity style={styles.button} onPress={() => setEditing(true)}>
+              <Text style={styles.buttonText}>Create Profile</Text>
+            </TouchableOpacity>
+          </GlassPanel>
+        </View>
+      </View>
+    );
+  }
+
+  if (editing) {
+    return (
+      <ScrollView
+        style={{ flex: 1, backgroundColor: 'transparent' }}
+        contentContainerStyle={[styles.formContainer, { paddingTop: insets.top + 16 }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.formHeading}>{profile ? 'Edit Profile' : 'Create Profile'}</Text>
+
+        <Text style={styles.label}>Profile Pic</Text>
+        <TouchableOpacity style={styles.avatarPicker} onPress={pickImage}>
+          {avatarUri
+            ? <Image source={{ uri: avatarUri }} style={styles.avatarPreview} />
+            : <View style={styles.avatarPlaceholder}><Text style={styles.avatarPlaceholderText}>📷  Choose Photo</Text></View>}
+          <Text style={styles.changePhotoText}>{avatarUri ? 'Change Photo' : 'Select from Library'}</Text>
+        </TouchableOpacity>
+
+        {[
+          { label: 'User Name *', key: 'username', placeholder: '@username', cap: 'none' as const },
+          { label: 'Person Name', key: 'person_name', placeholder: 'Your full name', cap: 'words' as const },
+          { label: 'Business Name', key: 'business_name', placeholder: 'Your studio or business name', cap: 'words' as const },
+          { label: 'Location', key: 'location', placeholder: 'City, State', cap: 'words' as const },
+          { label: 'Zip Code', key: 'zip_code', placeholder: 'e.g. 90210', cap: 'none' as const },
+        ].map(f => (
+          <View key={f.key}>
+            <Text style={styles.label}>{f.label}</Text>
+            <GlassPanel style={styles.inputWrap}>
+              <TextInput
+                style={styles.input}
+                placeholder={f.placeholder}
+                placeholderTextColor={GLASS.textMuted}
+                value={(form as any)[f.key]}
+                onChangeText={v => setForm(prev => ({ ...prev, [f.key]: v }))}
+                autoCapitalize={f.cap}
+                keyboardType={f.key === 'zip_code' ? 'number-pad' : 'default'}
+                maxLength={f.key === 'zip_code' ? 10 : undefined}
+              />
+            </GlassPanel>
+          </View>
+        ))}
+
+        <Text style={styles.label}>Email</Text>
+        <GlassPanel style={styles.inputWrap}>
+          <TextInput
+            style={styles.input} placeholder="you@example.com"
+            placeholderTextColor={GLASS.textMuted}
+            value={form.email} onChangeText={v => setForm(f => ({ ...f, email: v }))}
+            keyboardType="email-address" autoCapitalize="none"
+          />
+        </GlassPanel>
+        <GlassPanel style={styles.toggleRow}>
+          <View style={styles.toggleTextBlock}>
+            <Text style={styles.toggleTitle}>Show email publicly</Text>
+            <Text style={styles.toggleSub}>Off keeps your email hidden from other users</Text>
+          </View>
+          <Switch
+            value={form.email_public}
+            onValueChange={v => setForm(f => ({ ...f, email_public: v }))}
+            trackColor={{ false: 'rgba(255,255,255,0.2)', true: GLASS.accent }}
+            thumbColor="#fff"
+          />
+        </GlassPanel>
+
+        <Text style={styles.label}>Website</Text>
+        <GlassPanel style={styles.inputWrap}>
+          <TextInput
+            style={styles.input} placeholder="https://yoursite.com"
+            placeholderTextColor={GLASS.textMuted}
+            value={form.website} onChangeText={v => setForm(f => ({ ...f, website: v }))}
+            keyboardType="url" autoCapitalize="none"
+          />
+        </GlassPanel>
+
+        <TouchableOpacity style={[styles.button, styles.saveBtn, saving && styles.buttonDisabled]} onPress={handleSave} disabled={saving}>
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save Profile</Text>}
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.cancelButton} onPress={() => { setLocalImageUri(null); setEditing(false); }}>
+          <Text style={styles.cancelText}>Cancel</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  }
+
+  return (
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <Header navigation={navigation} onEdit={() => setEditing(true)} />
+
+      <GlassPanel style={styles.identityRow}>
+        {profile?.profile_pic
+          ? <Image source={{ uri: profile.profile_pic }} style={styles.avatar} />
+          : <View style={styles.avatarCircle}><Text style={styles.avatarLabel}>PIC</Text></View>}
+        <View style={styles.identityText}>
+          <Text style={styles.username}>@{profile?.username}</Text>
+          {profile?.person_name ? <Text style={styles.personName}>{profile.person_name}</Text> : null}
+          {profile?.business_name ? <Text style={styles.businessName}>{profile.business_name}</Text> : null}
+          {(profile?.location || profile?.zip_code)
+            ? <Text style={styles.locationText}>📍 {[profile.location, profile.zip_code].filter(Boolean).join(', ')}</Text>
+            : null}
+        </View>
+      </GlassPanel>
+
+      <GlassPanel style={styles.tabBar}>
+        {(['info', 'portfolio', 'locations', 'endorsements'] as const).map(t => (
+          <TouchableOpacity key={t} style={[styles.tabItem, tab === t && styles.tabItemActive]} onPress={() => setTab(t)}>
+            <Text style={[styles.tabLabel, tab === t && styles.tabLabelActive]}>
+              {t === 'endorsements' ? '★' : t === 'locations' ? '📍' : t.charAt(0).toUpperCase() + t.slice(1)}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </GlassPanel>
+
+      {tab === 'locations' ? (
+        <ScrollView contentContainerStyle={[styles.locContainer, { paddingBottom: insets.bottom + 90 }]}>
+          <TouchableOpacity style={styles.addLocBtn} onPress={() => setLocModalVisible(true)}>
+            <Text style={styles.addLocBtnText}>＋  Add a Location</Text>
+          </TouchableOpacity>
+          {profileLocations.length === 0 ? (
+            <GlassPanel style={styles.emptyEndorse}>
+              <Text style={styles.emptyEndorseText}>No locations added yet.</Text>
+            </GlassPanel>
+          ) : (
+            profileLocations.map(loc => (
+              <GlassPanel key={loc.id} style={styles.locCard}>
+                <Image
+                  source={{ uri: loc.photo_url || DEFAULT_LOCATION_PHOTO }}
+                  style={styles.locPhoto}
+                  resizeMode="cover"
+                />
+                <View style={styles.locCardRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.locName}>{loc.name}</Text>
+                    {loc.address ? <Text style={styles.locAddress}>📍 {loc.address}</Text> : null}
+                    {loc.description ? <Text style={styles.locDesc}>{loc.description}</Text> : null}
+                  </View>
+                  <TouchableOpacity onPress={() => handleDeleteLocation(loc.id)} style={styles.locDelete}>
+                    <Text style={styles.locDeleteText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              </GlassPanel>
+            ))
+          )}
+        </ScrollView>
+      ) : tab === 'endorsements' ? (
+        <ScrollView contentContainerStyle={[styles.endorseContainer, { paddingBottom: insets.bottom + 90 }]}>
+          <TouchableOpacity style={styles.writeEndorseBtn} onPress={() => setEndorseModalVisible(true)}>
+            <Text style={styles.writeEndorseBtnText}>✦  Write an Endorsement</Text>
+          </TouchableOpacity>
+          {endorsements.length === 0 ? (
+            <GlassPanel style={styles.emptyEndorse}>
+              <Text style={styles.emptyEndorseText}>No endorsements yet.</Text>
+            </GlassPanel>
+          ) : (
+            endorsements.map(e => (
+              <GlassPanel key={e.id} style={styles.endorseCard}>
+                <View style={styles.endorseCardHeader}>
+                  <Text style={styles.endorseAuthor}>@{e.endorser_name}</Text>
+                  <Text style={styles.endorseDate}>
+                    {new Date(e.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </Text>
+                </View>
+                <Text style={styles.endorseBody}>{e.text}</Text>
+              </GlassPanel>
+            ))
+          )}
+        </ScrollView>
+      ) : tab === 'info' ? (
+        <ScrollView contentContainerStyle={[styles.infoContainer, { paddingBottom: insets.bottom + 90 }]}>
+          <InfoRow label="Username" value={`@${profile?.username}`} />
+          {profile?.person_name ? <InfoRow label="Name" value={profile.person_name} /> : null}
+          {profile?.business_name ? <InfoRow label="Business" value={profile.business_name} /> : null}
+          {profile?.location ? <InfoRow label="Location" value={profile.location} /> : null}
+          {profile?.zip_code ? <InfoRow label="Zip Code" value={profile.zip_code} /> : null}
+
+          {((profile?.email && profile?.email_public) || profile?.website) &&
+            <Text style={styles.contactSectionLabel}>CONTACT</Text>}
+          {profile?.email && profile?.email_public && (
+            <TouchableOpacity onPress={() => Linking.openURL(`mailto:${profile.email}`)}>
+              <GlassPanel style={styles.contactRow}>
+                <Text style={styles.contactIcon}>✉️</Text>
+                <View style={styles.contactText}><Text style={styles.contactLabel}>Email</Text><Text style={styles.contactValue}>{profile.email}</Text></View>
+                <Text style={styles.contactArrow}>›</Text>
+              </GlassPanel>
+            </TouchableOpacity>
+          )}
+          {profile?.website && (
+            <TouchableOpacity onPress={() => { const u = profile.website!.startsWith('http') ? profile.website! : `https://${profile.website}`; Linking.openURL(u); }}>
+              <GlassPanel style={styles.contactRow}>
+                <Text style={styles.contactIcon}>🌐</Text>
+                <View style={styles.contactText}><Text style={styles.contactLabel}>Website</Text><Text style={styles.contactValue}>{profile.website}</Text></View>
+                <Text style={styles.contactArrow}>›</Text>
+              </GlassPanel>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      ) : (
+        <ScrollView contentContainerStyle={[styles.portfolioContainer, { paddingBottom: insets.bottom + 90 }]}>
+          <Text style={styles.portfolioHint}>Tap a slot to upload a photo</Text>
+          <View style={styles.portfolioGrid}>
+            {portfolioPics.map((uri, i) => (
+              <TouchableOpacity key={i} style={styles.portfolioSlot} onPress={() => pickPortfolioImage(i)} activeOpacity={0.75}>
+                <GlassPanel style={styles.portfolioPanel}>
+                  {portfolioUploading[i] ? (
+                    <ActivityIndicator color={GLASS.accent} />
+                  ) : uri ? (
+                    <Image source={{ uri }} style={styles.portfolioImage} />
+                  ) : (
+                    <>
+                      <Text style={styles.portfolioEmptyIcon}>+</Text>
+                      <Text style={styles.portfolioEmptyLabel}>Photo {i + 1}</Text>
+                    </>
+                  )}
+                </GlassPanel>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      )}
+      <EndorseModal
+        visible={endorseModalVisible}
+        onClose={() => setEndorseModalVisible(false)}
+        profileName={profile?.person_name || profile?.username || ''}
+        profilePic={profile?.profile_pic || null}
+        text={endorseText}
+        onChangeText={setEndorseText}
+        onSubmit={handleEndorse}
+        submitting={endorseSubmitting}
+      />
+
+      <Modal visible={locModalVisible} transparent animationType="slide">
+        <View style={styles.locOverlay}>
+          <GlassPanel style={{ ...styles.locSheet, paddingBottom: insets.bottom + 16 }}>
+            <View style={styles.locSheetHeader}>
+              <Text style={styles.locSheetTitle}>📍 Add a Location</Text>
+              <TouchableOpacity onPress={() => setLocModalVisible(false)}>
+                <Text style={styles.locSheetCancel}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <TouchableOpacity style={styles.locPhotoPicker} onPress={pickLocPhoto}>
+                {locPhotoUri
+                  ? <Image source={{ uri: locPhotoUri }} style={styles.locPhotoPreview} />
+                  : <Image source={{ uri: DEFAULT_LOCATION_PHOTO }} style={styles.locPhotoPreview} />}
+                <View style={styles.locPhotoOverlay}>
+                  <Text style={styles.locPhotoOverlayText}>📷  {locPhotoUri ? 'Change Photo' : 'Add Photo'}</Text>
+                </View>
+              </TouchableOpacity>
+
+              <Text style={styles.label}>Location Name *</Text>
+              <GlassPanel style={styles.inputWrap}>
+                <TextInput style={styles.input} value={locName} onChangeText={setLocName}
+                  placeholder="e.g. Riverside Park" placeholderTextColor={GLASS.textMuted} />
+              </GlassPanel>
+              <Text style={styles.label}>Address</Text>
+              <GlassPanel style={styles.inputWrap}>
+                <TextInput style={styles.input} value={locAddress} onChangeText={setLocAddress}
+                  placeholder="Street, City, State" placeholderTextColor={GLASS.textMuted} />
+              </GlassPanel>
+              <Text style={styles.label}>Notes</Text>
+              <GlassPanel style={styles.inputWrap}>
+                <TextInput style={[styles.input, { height: 90, textAlignVertical: 'top' }]}
+                  value={locDescription} onChangeText={setLocDescription}
+                  placeholder="Best time to shoot, what to look for..."
+                  placeholderTextColor={GLASS.textMuted} multiline numberOfLines={4} />
+              </GlassPanel>
+              <TouchableOpacity
+                style={[styles.button, styles.saveBtn, locSaving && styles.buttonDisabled]}
+                onPress={handleAddLocation} disabled={locSaving}
+              >
+                {locSaving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save Location</Text>}
+              </TouchableOpacity>
+            </ScrollView>
+          </GlassPanel>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+function EndorseModal({
+  visible, onClose, profileName, profilePic, text, onChangeText, onSubmit, submitting,
+}: {
+  visible: boolean; onClose: () => void; profileName: string; profilePic: string | null;
+  text: string; onChangeText: (v: string) => void; onSubmit: () => void; submitting: boolean;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={eStyles.overlay}>
+        <GlassPanel style={{ ...eStyles.sheet, paddingBottom: insets.bottom + 20 }}>
+          <TouchableOpacity style={eStyles.closeBtn} onPress={onClose}>
+            <Text style={eStyles.closeText}>✕</Text>
+          </TouchableOpacity>
+          <View style={eStyles.avatarWrap}>
+            {profilePic
+              ? <Image source={{ uri: profilePic }} style={eStyles.avatar} />
+              : <View style={eStyles.avatarPlaceholder}><Text style={eStyles.avatarPlaceholderText}>PIC</Text></View>}
+          </View>
+          <Text style={eStyles.heading}>Write an Endorsement</Text>
+          <Text style={eStyles.subheading}>Share your positive experience working with {profileName}</Text>
+          <GlassPanel style={eStyles.inputWrap}>
+            <TextInput
+              style={eStyles.input}
+              placeholder={`Write your endorsement here…\nTell others what made collaborating with ${profileName} special.`}
+              placeholderTextColor={GLASS.textMuted}
+              value={text}
+              onChangeText={onChangeText}
+              multiline
+              numberOfLines={6}
+            />
+          </GlassPanel>
+          <TouchableOpacity
+            style={[eStyles.submitBtn, submitting && eStyles.submitDisabled]}
+            onPress={onSubmit}
+            disabled={submitting}
+          >
+            {submitting
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={eStyles.submitText}>Submit Endorsement</Text>}
+          </TouchableOpacity>
+        </GlassPanel>
+      </View>
+    </Modal>
+  );
+}
+
+const eStyles = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)' },
+  sheet: { borderRadius: 28, marginHorizontal: 0, paddingHorizontal: 24, paddingTop: 32 },
+  closeBtn: { position: 'absolute', top: 16, right: 20, zIndex: 10, padding: 6 },
+  closeText: { fontSize: 16, color: GLASS.textMuted, fontWeight: '600' },
+  avatarWrap: { alignItems: 'center', marginBottom: 16 },
+  avatar: { width: 80, height: 80, borderRadius: 40, borderWidth: 3, borderColor: GLASS.accent },
+  avatarPlaceholder: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: GLASS.accent },
+  avatarPlaceholderText: { fontSize: 14, color: GLASS.textMuted, fontWeight: '600' },
+  heading: { fontSize: 22, fontWeight: '700', color: GLASS.text, textAlign: 'center', marginBottom: 6 },
+  subheading: { fontSize: 14, color: GLASS.textSub, textAlign: 'center', marginBottom: 20, lineHeight: 20 },
+  inputWrap: { borderRadius: 16, marginBottom: 20 },
+  input: { paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: GLASS.text, minHeight: 130, textAlignVertical: 'top' },
+  submitBtn: { backgroundColor: GLASS.accent, paddingVertical: 16, borderRadius: 14, alignItems: 'center' },
+  submitDisabled: { opacity: 0.6 },
+  submitText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+});
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <GlassPanel style={styles.infoRow}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue}>{value}</Text>
+    </GlassPanel>
+  );
+}
+
+function Header({ navigation, onEdit }: { navigation: any; onEdit?: () => void }) {
+  return (
+    <GlassPanel style={styles.header}>
+      <TouchableOpacity onPress={() => navigation.goBack()}>
+        <Text style={styles.back}>← Back</Text>
+      </TouchableOpacity>
+      <View style={styles.headerRow}>
+        <Text style={styles.heading}>Profile</Text>
+        {onEdit && <TouchableOpacity onPress={onEdit}><Text style={styles.editLink}>Edit</Text></TouchableOpacity>}
+      </View>
+    </GlassPanel>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: 'transparent', paddingHorizontal: 14 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+
+  header: { borderRadius: 18, marginBottom: 12, paddingHorizontal: 16, paddingVertical: 14 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  back: { color: GLASS.accent, fontSize: 15, marginBottom: 4 },
+  heading: { fontSize: 22, fontWeight: '700', color: GLASS.text },
+  editLink: { color: GLASS.accent, fontSize: 15, fontWeight: '600' },
+
+  noProfileCard: { alignItems: 'center', borderRadius: 24, padding: 36 },
+  noProfileText: { fontSize: 26, fontWeight: '700', color: GLASS.text, marginBottom: 8, marginTop: 16 },
+  subtext: { fontSize: 15, color: GLASS.textSub, textAlign: 'center', marginBottom: 28 },
+
+  identityRow: {
+    flexDirection: 'row', alignItems: 'center',
+    borderRadius: 18, paddingHorizontal: 18, paddingVertical: 16,
+    marginBottom: 10, gap: 16,
+  },
+  identityText: { flex: 1 },
+  avatarCircle: {
+    width: 72, height: 72, borderRadius: 36,
+    borderWidth: 1.5, borderColor: GLASS.border,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  avatar: { width: 72, height: 72, borderRadius: 36 },
+  avatarLabel: { fontSize: 16, color: GLASS.textMuted, fontWeight: '600' },
+  username: { fontSize: 18, fontWeight: '700', color: GLASS.text, marginBottom: 2 },
+  personName: { fontSize: 15, color: GLASS.textSub, marginBottom: 2 },
+  businessName: { fontSize: 14, color: GLASS.textSub, marginBottom: 2 },
+  locationText: { fontSize: 13, color: GLASS.textMuted, marginTop: 2 },
+
+  tabBar: { flexDirection: 'row', borderRadius: 14, marginBottom: 10, overflow: 'hidden' },
+  tabItem: { flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabItemActive: { borderBottomColor: GLASS.accent },
+  tabLabel: { fontSize: 15, fontWeight: '600', color: GLASS.textSub },
+  tabLabelActive: { color: GLASS.text },
+
+  infoContainer: { paddingBottom: 32 },
+  infoRow: { borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 8 },
+  infoLabel: { fontSize: 11, fontWeight: '700', color: GLASS.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+  infoValue: { fontSize: 16, color: GLASS.text },
+
+  contactSectionLabel: {
+    fontSize: 11, fontWeight: '700', letterSpacing: 1.2,
+    color: GLASS.textMuted, textTransform: 'uppercase',
+    marginTop: 16, marginBottom: 8, marginLeft: 2,
+  },
+  contactRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 8 },
+  contactIcon: { fontSize: 20, marginRight: 12 },
+  contactText: { flex: 1 },
+  contactLabel: { fontSize: 11, fontWeight: '600', color: GLASS.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+  contactValue: { fontSize: 15, color: GLASS.accent },
+  contactArrow: { fontSize: 22, color: GLASS.textMuted, marginLeft: 8 },
+
+  portfolioContainer: { paddingBottom: 32 },
+  portfolioHint: { fontSize: 13, color: GLASS.textMuted, textAlign: 'center', marginBottom: 16 },
+  portfolioGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  portfolioSlot: {
+    width: '47%', aspectRatio: 1, borderRadius: 16,
+    overflow: 'hidden', borderWidth: 1, borderColor: GLASS.border,
+  },
+  portfolioPanel: {
+    flex: 1, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
+  },
+  portfolioImage: { width: '100%', height: '100%', borderRadius: 16 },
+  portfolioEmptyIcon: { fontSize: 32, color: GLASS.textMuted, lineHeight: 36 },
+  portfolioEmptyLabel: { fontSize: 12, color: GLASS.textMuted, marginTop: 4 },
+
+  button: { backgroundColor: GLASS.accent, paddingVertical: 14, paddingHorizontal: 36, borderRadius: 14, alignItems: 'center' },
+  saveBtn: { marginTop: 24 },
+  buttonDisabled: { opacity: 0.6 },
+  buttonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  cancelButton: { alignItems: 'center', marginTop: 14, paddingVertical: 10 },
+  cancelText: { color: GLASS.textSub, fontSize: 15 },
+
+  formContainer: { paddingHorizontal: 20, paddingBottom: 40 },
+  formHeading: { fontSize: 22, fontWeight: '700', color: GLASS.text, marginBottom: 4 },
+  label: { fontSize: 13, fontWeight: '600', color: GLASS.textSub, marginBottom: 6, marginTop: 14 },
+  inputWrap: { borderRadius: 14 },
+  input: { paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: GLASS.text },
+  avatarPicker: { alignItems: 'center', marginTop: 4 },
+  avatarPreview: { width: 100, height: 100, borderRadius: 50, marginBottom: 8 },
+  avatarPlaceholder: {
+    width: 100, height: 100, borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 8,
+    borderWidth: 1, borderColor: GLASS.border,
+  },
+  avatarPlaceholderText: { fontSize: 14, color: GLASS.textMuted },
+  changePhotoText: { color: GLASS.accent, fontSize: 14, fontWeight: '600' },
+  locOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.3)' },
+  locSheet: { borderRadius: 28, marginHorizontal: 0, paddingHorizontal: 20, paddingTop: 20, maxHeight: '75%' },
+  locSheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: GLASS.border },
+  locSheetTitle: { fontSize: 17, fontWeight: '700', color: GLASS.text },
+  locSheetCancel: { color: GLASS.accent, fontSize: 15, fontWeight: '600' },
+
+  locContainer: { paddingBottom: 32, gap: 10 },
+  addLocBtn: { backgroundColor: GLASS.accent, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
+  addLocBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  locCard: { borderRadius: 14, overflow: 'hidden' },
+  locPhoto: { width: '100%', height: 140 },
+  locCardRow: { flexDirection: 'row', alignItems: 'flex-start', padding: 12 },
+  locName: { fontSize: 15, fontWeight: '700', color: GLASS.text, marginBottom: 3 },
+  locAddress: { fontSize: 13, color: GLASS.textSub, marginBottom: 3 },
+  locDesc: { fontSize: 13, color: GLASS.textMuted, lineHeight: 18 },
+  locDelete: { paddingLeft: 10, paddingTop: 2 },
+  locDeleteText: { fontSize: 14, color: GLASS.textMuted, fontWeight: '600' },
+  locPhotoPicker: { borderRadius: 14, overflow: 'hidden', height: 160, marginBottom: 4 },
+  locPhotoPreview: { width: '100%', height: '100%' },
+  locPhotoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.32)', alignItems: 'center', justifyContent: 'center' },
+  locPhotoOverlayText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+
+  endorseContainer: { paddingBottom: 32, gap: 10 },
+  writeEndorseBtn: { backgroundColor: GLASS.accent, paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginBottom: 4 },
+  writeEndorseBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  emptyEndorse: { borderRadius: 18, alignItems: 'center', padding: 36, marginTop: 20 },
+  emptyEndorseText: { color: GLASS.textSub, fontSize: 15 },
+  endorseCard: { borderRadius: 16, padding: 16 },
+  endorseCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  endorseAuthor: { fontSize: 14, fontWeight: '700', color: GLASS.text },
+  endorseDate: { fontSize: 12, color: GLASS.textMuted },
+  endorseBody: { fontSize: 15, color: GLASS.textSub, lineHeight: 22 },
+
+  toggleRow: { borderRadius: 14, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, marginTop: 8 },
+  toggleTextBlock: { flex: 1, marginRight: 12 },
+  toggleTitle: { fontSize: 15, color: GLASS.text, fontWeight: '500' },
+  toggleSub: { fontSize: 12, color: GLASS.textMuted, marginTop: 2 },
+});

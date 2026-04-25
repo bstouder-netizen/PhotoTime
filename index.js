@@ -2,6 +2,8 @@
  * @format
  */
 
+import 'react-native-get-random-values';
+import 'react-native-url-polyfill/auto';
 import { AppRegistry } from 'react-native';
 import { enableScreens } from 'react-native-screens';
 import App from './App';

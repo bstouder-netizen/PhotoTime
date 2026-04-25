@@ -5,6 +5,7 @@
  * @format
  */
 
+import { useEffect } from 'react';
 import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import MainNavigator from './MainNavigator';
@@ -13,6 +14,11 @@ const BG = '#f2f2f2';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
+
+  useEffect(() => {
+    // Firebase not configured until GoogleService-Info.plist is added
+    // registerPushToken();
+  }, []);
   return (
     <SafeAreaProvider>
       {/* Fill entire screen including unsafe areas (home indicator zone) with grey */}
