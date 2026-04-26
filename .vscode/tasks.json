@@ -1,0 +1,13 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run React Native app (iOS)",
+			"type": "shell",
+			"command": "npm run ios",
+			"args": [],
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}

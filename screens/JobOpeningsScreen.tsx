@@ -22,6 +22,27 @@ const JOB_TYPES = [
   'Documentary', 'Pet', 'Drone',
 ];
 
+type PayFilter = '' | 'under_500' | '500_1000' | 'over_1000';
+type DateFilter = '' | 'this_week' | 'this_month';
+
+const PAY_LABELS: Record<PayFilter, string> = {
+  '': 'Any Pay',
+  'under_500': 'Under $500',
+  '500_1000': '$500–$1000',
+  'over_1000': '$1000+',
+};
+
+const DATE_LABELS: Record<DateFilter, string> = {
+  '': 'Any Date',
+  'this_week': 'This Week',
+  'this_month': 'This Month',
+};
+
+function parsePay(pay: string): number | null {
+  const match = pay.replace(/,/g, '').match(/\d+/);
+  return match ? parseInt(match[0], 10) : null;
+}
+
 export default function JobOpeningsScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -29,6 +50,12 @@ export default function JobOpeningsScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState('');
+
+  // Filters
+  const [filterType, setFilterType] = useState('');
+  const [filterPay, setFilterPay] = useState<PayFilter>('');
+  const [filterDate, setFilterDate] = useState<DateFilter>('');
+  const [filterSheetType, setFilterSheetType] = useState<'type' | 'pay' | 'date' | null>(null);
 
   // Edit modal state
   const [editJob, setEditJob] = useState<Job | null>(null);
@@ -66,6 +93,32 @@ export default function JobOpeningsScreen({ navigation }: any) {
   };
 
   useEffect(() => { fetchJobs(); }, []);
+
+  const filteredJobs = jobs.filter(job => {
+    if (filterType && job.type !== filterType) return false;
+    if (filterPay && job.pay) {
+      const amount = parsePay(job.pay);
+      if (amount !== null) {
+        if (filterPay === 'under_500' && amount >= 500) return false;
+        if (filterPay === '500_1000' && (amount < 500 || amount > 1000)) return false;
+        if (filterPay === 'over_1000' && amount <= 1000) return false;
+      }
+    }
+    if (filterDate && job.job_date) {
+      const jobDate = new Date(job.job_date + 'T12:00:00');
+      const now = new Date();
+      if (filterDate === 'this_week') {
+        const weekOut = new Date(); weekOut.setDate(now.getDate() + 7);
+        if (jobDate < now || jobDate > weekOut) return false;
+      }
+      if (filterDate === 'this_month') {
+        if (jobDate.getMonth() !== now.getMonth() || jobDate.getFullYear() !== now.getFullYear()) return false;
+      }
+    }
+    return true;
+  });
+
+  const activeFilterCount = [filterType, filterPay, filterDate].filter(Boolean).length;
 
   const openEdit = (job: Job) => {
     setEditJob(job);
@@ -129,11 +182,39 @@ export default function JobOpeningsScreen({ navigation }: any) {
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text style={styles.back}>← Back</Text>
           </TouchableOpacity>
-          <Text style={styles.heading}>Job Openings</Text>
+          <View style={styles.headingRow}>
+            <Text style={styles.heading}>Job Openings</Text>
+            {activeFilterCount > 0 && (
+              <TouchableOpacity onPress={() => { setFilterType(''); setFilterPay(''); setFilterDate(''); }}>
+                <Text style={styles.clearFilters}>Clear filters</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {/* Filter chips */}
+          <View style={styles.filterRow}>
+            {([
+              { key: 'type', label: filterType || 'Type' },
+              { key: 'date', label: DATE_LABELS[filterDate] !== 'Any Date' ? DATE_LABELS[filterDate] : 'Date' },
+              { key: 'pay',  label: PAY_LABELS[filterPay]   !== 'Any Pay'  ? PAY_LABELS[filterPay]   : 'Pay'  },
+            ] as const).map(f => {
+              const active = f.key === 'type' ? !!filterType : f.key === 'date' ? !!filterDate : !!filterPay;
+              return (
+                <TouchableOpacity
+                  key={f.key}
+                  style={[styles.filterChip, active && styles.filterChipActive]}
+                  onPress={() => setFilterSheetType(f.key)}
+                >
+                  <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                    {f.label} ▾
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </GlassPanel>
 
         <FlatList
-          data={jobs}
+          data={filteredJobs}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
           refreshControl={
@@ -292,6 +373,70 @@ export default function JobOpeningsScreen({ navigation }: any) {
         </GlassPanel>
       </Modal>
 
+      {/* Filter Sheet */}
+      <Modal visible={!!filterSheetType} transparent animationType="slide">
+        <TouchableOpacity style={styles.modalOverlay} onPress={() => setFilterSheetType(null)} />
+        <GlassPanel style={styles.pickerSheet}>
+          <View style={{ paddingBottom: insets.bottom + 8 }}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>
+                {filterSheetType === 'type' ? 'Filter by Type' : filterSheetType === 'pay' ? 'Filter by Pay' : 'Filter by Date'}
+              </Text>
+              <TouchableOpacity onPress={() => setFilterSheetType(null)}>
+                <Text style={styles.sheetCancel}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            {filterSheetType === 'type' && (
+              <FlatList
+                data={['', ...JOB_TYPES]}
+                keyExtractor={item => item || '__all__'}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.typeRow}
+                    onPress={() => { setFilterType(item); setFilterSheetType(null); }}
+                  >
+                    <Text style={[styles.typeText, item === filterType && styles.typeSelected]}>
+                      {item || 'All Types'}
+                    </Text>
+                    {item === filterType && <Text style={styles.checkmark}>✓</Text>}
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+            {filterSheetType === 'pay' && (
+              <FlatList
+                data={Object.entries(PAY_LABELS) as [PayFilter, string][]}
+                keyExtractor={([k]) => k || '__all__'}
+                renderItem={({ item: [key, label] }) => (
+                  <TouchableOpacity
+                    style={styles.typeRow}
+                    onPress={() => { setFilterPay(key); setFilterSheetType(null); }}
+                  >
+                    <Text style={[styles.typeText, key === filterPay && styles.typeSelected]}>{label}</Text>
+                    {key === filterPay && <Text style={styles.checkmark}>✓</Text>}
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+            {filterSheetType === 'date' && (
+              <FlatList
+                data={Object.entries(DATE_LABELS) as [DateFilter, string][]}
+                keyExtractor={([k]) => k || '__all__'}
+                renderItem={({ item: [key, label] }) => (
+                  <TouchableOpacity
+                    style={styles.typeRow}
+                    onPress={() => { setFilterDate(key); setFilterSheetType(null); }}
+                  >
+                    <Text style={[styles.typeText, key === filterDate && styles.typeSelected]}>{label}</Text>
+                    {key === filterDate && <Text style={styles.checkmark}>✓</Text>}
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </GlassPanel>
+      </Modal>
+
       {/* Type Picker */}
       <Modal visible={typePickerVisible} transparent animationType="slide">
         <TouchableOpacity style={styles.modalOverlay} onPress={() => setTypePickerVisible(false)} />
@@ -379,4 +524,12 @@ const styles = StyleSheet.create({
   typeText: { fontSize: 16, color: GLASS.textSub },
   typeSelected: { color: GLASS.text, fontWeight: '600' },
   checkmark: { color: GLASS.accent, fontSize: 16, fontWeight: '700' },
+
+  headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  clearFilters: { color: GLASS.accent, fontSize: 13, fontWeight: '600' },
+  filterRow: { flexDirection: 'row', gap: 8 },
+  filterChip: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: 'rgba(0,0,0,0.06)', borderWidth: 1, borderColor: GLASS.border },
+  filterChipActive: { backgroundColor: GLASS.accent, borderColor: GLASS.accent },
+  filterChipText: { fontSize: 13, fontWeight: '600', color: GLASS.textSub },
+  filterChipTextActive: { color: '#fff' },
 });

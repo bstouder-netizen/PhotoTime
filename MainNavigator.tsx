@@ -60,7 +60,7 @@ const TAB_LABELS: Record<string, string> = {
   Home: 'Home',
   Locations: 'Locations',
   Shoots: 'Shoots',
-  Search: 'Search',
+  Search: 'Photography Stuff',
   Portfolio: 'Portfolio',
 };
 
