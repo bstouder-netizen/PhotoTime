@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GlassPanel, GLASS } from '../components/Glass';
+import { GlassPanel, useColors, GlassColors } from '../components/Glass';
 
 export default function ShootsScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
+  const C = useColors();
+  const styles = useMemo(() => makeStyles(C), [C]);
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <GlassPanel style={styles.header}>
@@ -30,15 +32,13 @@ export default function ShootsScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: GlassColors) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: 'transparent', paddingHorizontal: 16 },
   header: { borderRadius: 18, marginBottom: 16, paddingHorizontal: 16, paddingVertical: 14 },
-  heading: { fontSize: 22, fontWeight: '700', color: GLASS.text },
+  heading: { fontSize: Math.round(22 * C.textScale), fontWeight: '700', color: C.text },
   body: { flex: 1, justifyContent: 'center', gap: 14 },
-  actionCard: {
-    borderRadius: 22, paddingVertical: 28, paddingHorizontal: 24, alignItems: 'center',
-  },
-  actionIcon: { fontSize: 40, marginBottom: 12 },
-  actionTitle: { fontSize: 20, fontWeight: '700', color: GLASS.text, marginBottom: 6 },
-  actionSub: { fontSize: 14, color: GLASS.textSub },
+  actionCard: { borderRadius: 22, paddingVertical: 28, paddingHorizontal: 24, alignItems: 'center' },
+  actionIcon: { fontSize: Math.round(40 * C.textScale), marginBottom: 12 },
+  actionTitle: { fontSize: Math.round(20 * C.textScale), fontWeight: '700', color: C.text, marginBottom: 6 },
+  actionSub: { fontSize: Math.round(14 * C.textScale), color: C.textSub },
 });

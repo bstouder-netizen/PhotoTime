@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, Platform, Alert,
@@ -6,7 +6,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getTimes as getSunTimes } from 'suncalc';
-import { GlassPanel, GLASS } from '../components/Glass';
+import { GlassPanel, useColors, GlassColors } from '../components/Glass';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
 
@@ -30,6 +30,8 @@ function buildSchedule(lat: number, lng: number, date: Date): SunEvent[] {
 }
 
 export default function SunsetCalculatorScreen({ navigation }: any) {
+  const C = useColors();
+  const styles = useMemo(() => makeStyles(C), [C]);
   const insets = useSafeAreaInsets();
   const [locationText, setLocationText] = useState('');
   const [date, setDate] = useState(new Date());
@@ -113,7 +115,7 @@ export default function SunsetCalculatorScreen({ navigation }: any) {
           <TextInput
             style={styles.input}
             placeholder="City or location..."
-            placeholderTextColor={GLASS.textMuted}
+            placeholderTextColor={C.textMuted}
             value={locationText}
             onChangeText={setLocationText}
             onSubmitEditing={handleCalculate}
@@ -195,43 +197,43 @@ export default function SunsetCalculatorScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: GlassColors) => StyleSheet.create({
   container: { paddingHorizontal: 14 },
 
   header: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10 },
-  back: { color: GLASS.accent, fontSize: 14, marginBottom: 4 },
-  heading: { fontSize: 20, fontWeight: '800', color: GLASS.text, marginBottom: 1 },
-  subheading: { fontSize: 12, color: GLASS.textMuted },
+  back: { color: C.accent, fontSize: Math.round(14 * C.textScale), marginBottom: 4 },
+  heading: { fontSize: Math.round(20 * C.textScale), fontWeight: '800', color: C.text, marginBottom: 1 },
+  subheading: { fontSize: Math.round(12 * C.textScale), color: C.textMuted },
 
   inputRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   locationWrap: { flex: 1, borderRadius: 12 },
-  input: { paddingHorizontal: 12, paddingVertical: 11, fontSize: 14, color: GLASS.text },
+  input: { paddingHorizontal: 12, paddingVertical: 11, fontSize: Math.round(14 * C.textScale), color: C.text },
   dateWrap: { borderRadius: 12, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 11 },
-  dateText: { fontSize: 13, color: GLASS.text, marginRight: 6 },
-  dateIcon: { fontSize: 14 },
+  dateText: { fontSize: Math.round(13 * C.textScale), color: C.text, marginRight: 6 },
+  dateIcon: { fontSize: Math.round(14 * C.textScale) },
 
-  errorText: { color: '#FF3B30', fontSize: 12, marginBottom: 6, marginLeft: 2 },
+  errorText: { color: '#FF3B30', fontSize: Math.round(12 * C.textScale), marginBottom: 6, marginLeft: 2 },
 
-  calcBtn: { backgroundColor: GLASS.accent, paddingVertical: 13, borderRadius: 12, alignItems: 'center', marginBottom: 12 },
+  calcBtn: { backgroundColor: C.accent, paddingVertical: 13, borderRadius: 12, alignItems: 'center', marginBottom: 12 },
   calcBtnDisabled: { opacity: 0.6 },
-  calcBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  calcBtnText: { color: '#fff', fontSize: Math.round(15 * C.textScale), fontWeight: '700' },
 
   resultHeader: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 6 },
   resultHeaderInner: { flexDirection: 'row', alignItems: 'center' },
-  resultLocation: { fontSize: 13, fontWeight: '600', color: GLASS.text },
-  resultDate: { fontSize: 11, color: GLASS.textMuted, marginTop: 1 },
-  saveBtn: { backgroundColor: GLASS.accent, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, marginLeft: 8 },
+  resultLocation: { fontSize: Math.round(13 * C.textScale), fontWeight: '600', color: C.text },
+  resultDate: { fontSize: Math.round(11 * C.textScale), color: C.textMuted, marginTop: 1 },
+  saveBtn: { backgroundColor: C.accent, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, marginLeft: 8 },
   saveBtnDone: { backgroundColor: '#34C759' },
-  saveBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  saveBtnText: { color: '#fff', fontSize: Math.round(12 * C.textScale), fontWeight: '700' },
 
   eventCard: { borderRadius: 10, marginBottom: 4, paddingHorizontal: 12, paddingVertical: 8 },
-  eventCardKey: { borderWidth: 1.5, borderColor: GLASS.accent },
+  eventCardKey: { borderWidth: 1.5, borderColor: C.accent },
   eventRow: { flexDirection: 'row', alignItems: 'center' },
-  eventEmoji: { fontSize: 17, marginRight: 10, width: 24, textAlign: 'center' },
+  eventEmoji: { fontSize: Math.round(17 * C.textScale), marginRight: 10, width: 24, textAlign: 'center' },
   eventInfo: { flex: 1 },
-  eventLabel: { fontSize: 13, color: GLASS.textSub, fontWeight: '500' },
-  eventLabelKey: { color: GLASS.text, fontWeight: '700' },
-  eventNote: { fontSize: 10, color: GLASS.textMuted, marginTop: 1 },
-  eventTime: { fontSize: 13, color: GLASS.textSub, fontWeight: '500' },
-  eventTimeKey: { fontSize: 13, color: GLASS.text, fontWeight: '700' },
+  eventLabel: { fontSize: Math.round(13 * C.textScale), color: C.textSub, fontWeight: '500' },
+  eventLabelKey: { color: C.text, fontWeight: '700' },
+  eventNote: { fontSize: Math.round(10 * C.textScale), color: C.textMuted, marginTop: 1 },
+  eventTime: { fontSize: Math.round(13 * C.textScale), color: C.textSub, fontWeight: '500' },
+  eventTimeKey: { fontSize: Math.round(13 * C.textScale), color: C.text, fontWeight: '700' },
 });

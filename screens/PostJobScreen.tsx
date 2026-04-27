@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert, Modal, FlatList } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
-import { GlassPanel, GLASS } from '../components/Glass';
+import { GlassPanel, useColors, GlassColors } from '../components/Glass';
 
 const JOB_TYPES = [
   'Wedding', 'Portrait', 'Headshot', 'Family', 'Event', 'Corporate',
@@ -15,6 +15,8 @@ const JOB_TYPES = [
 
 export default function PostJobScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
+  const C = useColors();
+  const styles = useMemo(() => makeStyles(C), [C]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
@@ -42,7 +44,7 @@ export default function PostJobScreen({ navigation }: any) {
     if (!title.trim() || !description.trim()) { Alert.alert('Required', 'Title and description are required.'); return; }
     setLoading(true);
     const { error } = await supabase.from('job_postings').insert([{
-      title, description, location, pay, type: jobType,
+      title, description, location: location.trim() || null, pay, type: jobType,
       job_date: jobDate?.toISOString().split('T')[0] ?? null,
       device_id: deviceId,
       posted_by: postedBy,
@@ -65,7 +67,7 @@ export default function PostJobScreen({ navigation }: any) {
         <Text style={styles.label}>Job Title *</Text>
         <GlassPanel style={styles.inputWrap}>
           <TextInput style={styles.input} placeholder="e.g. Wedding Photographer Needed"
-            placeholderTextColor={GLASS.textMuted} value={title} onChangeText={setTitle} />
+            placeholderTextColor={C.textMuted} value={title} onChangeText={setTitle} />
         </GlassPanel>
 
         <Text style={styles.label}>Job Type</Text>
@@ -87,19 +89,19 @@ export default function PostJobScreen({ navigation }: any) {
         <Text style={styles.label}>Description *</Text>
         <GlassPanel style={styles.inputWrap}>
           <TextInput style={[styles.input, styles.textArea]} placeholder="Describe the job, requirements, dates..."
-            placeholderTextColor={GLASS.textMuted} value={description} onChangeText={setDescription} multiline numberOfLines={5} />
+            placeholderTextColor={C.textMuted} value={description} onChangeText={setDescription} multiline numberOfLines={5} />
         </GlassPanel>
 
         <Text style={styles.label}>Location</Text>
         <GlassPanel style={styles.inputWrap}>
           <TextInput style={styles.input} placeholder="e.g. Los Angeles, CA"
-            placeholderTextColor={GLASS.textMuted} value={location} onChangeText={setLocation} />
+            placeholderTextColor={C.textMuted} value={location} onChangeText={setLocation} />
         </GlassPanel>
 
         <Text style={styles.label}>Pay</Text>
         <GlassPanel style={styles.inputWrap}>
           <TextInput style={styles.input} placeholder="e.g. $500 / day"
-            placeholderTextColor={GLASS.textMuted} value={pay} onChangeText={setPay} />
+            placeholderTextColor={C.textMuted} value={pay} onChangeText={setPay} />
         </GlassPanel>
 
         <TouchableOpacity style={[styles.button, loading && styles.buttonDisabled]} onPress={handleSubmit} disabled={loading}>
@@ -149,30 +151,30 @@ export default function PostJobScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: GlassColors) => StyleSheet.create({
   container: { paddingHorizontal: 20, paddingBottom: 40 },
-  heading: { fontSize: 24, fontWeight: '700', marginBottom: 4, color: GLASS.text },
-  postedAs: { fontSize: 13, color: GLASS.textMuted, marginBottom: 20 },
-  label: { fontSize: 13, fontWeight: '600', color: GLASS.textSub, marginBottom: 6, marginTop: 14 },
+  heading: { fontSize: Math.round(24 * C.textScale), fontWeight: '700', marginBottom: 4, color: C.text },
+  postedAs: { fontSize: Math.round(13 * C.textScale), color: C.textMuted, marginBottom: 20 },
+  label: { fontSize: Math.round(13 * C.textScale), fontWeight: '600', color: C.textSub, marginBottom: 6, marginTop: 14 },
   inputWrap: { borderRadius: 14 },
-  input: { paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: GLASS.text },
+  input: { paddingHorizontal: 14, paddingVertical: 13, fontSize: Math.round(15 * C.textScale), color: C.text },
   textArea: { height: 120, textAlignVertical: 'top' },
   picker: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14 },
-  pickerValue: { fontSize: 15, color: GLASS.text, flex: 1 },
-  pickerPlaceholder: { fontSize: 15, color: GLASS.textMuted, flex: 1 },
-  pickerChevron: { fontSize: 16, color: GLASS.textSub },
-  button: { backgroundColor: GLASS.accent, paddingVertical: 15, borderRadius: 14, alignItems: 'center', marginTop: 28 },
+  pickerValue: { fontSize: Math.round(15 * C.textScale), color: C.text, flex: 1 },
+  pickerPlaceholder: { fontSize: Math.round(15 * C.textScale), color: C.textMuted, flex: 1 },
+  pickerChevron: { fontSize: Math.round(16 * C.textScale), color: C.textSub },
+  button: { backgroundColor: C.accent, paddingVertical: 15, borderRadius: 14, alignItems: 'center', marginTop: 28 },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  buttonText: { color: '#fff', fontSize: Math.round(16 * C.textScale), fontWeight: '700' },
   cancelButton: { alignItems: 'center', marginTop: 14, paddingVertical: 10 },
-  cancelText: { color: GLASS.textSub, fontSize: 15 },
+  cancelText: { color: C.textSub, fontSize: Math.round(15 * C.textScale) },
   modalOverlay: { flex: 1 },
   modalSheet: { borderRadius: 24, marginHorizontal: 12, marginBottom: 12, maxHeight: '55%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: GLASS.border },
-  modalTitle: { fontSize: 17, fontWeight: '600', color: GLASS.text },
-  modalDone: { color: GLASS.accent, fontSize: 16, fontWeight: '600' },
-  typeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: GLASS.border },
-  typeText: { fontSize: 16, color: GLASS.textSub },
-  typeSelected: { color: GLASS.text, fontWeight: '600' },
-  checkmark: { color: GLASS.accent, fontSize: 16, fontWeight: '700' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: C.border },
+  modalTitle: { fontSize: Math.round(17 * C.textScale), fontWeight: '600', color: C.text },
+  modalDone: { color: C.accent, fontSize: Math.round(16 * C.textScale), fontWeight: '600' },
+  typeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.border },
+  typeText: { fontSize: Math.round(16 * C.textScale), color: C.textSub },
+  typeSelected: { color: C.text, fontWeight: '600' },
+  checkmark: { color: C.accent, fontSize: Math.round(16 * C.textScale), fontWeight: '700' },
 });

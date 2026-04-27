@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity,
   RefreshControl, Modal, TextInput, ScrollView, Alert,
@@ -7,7 +7,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
-import { GlassPanel, GLASS } from '../components/Glass';
+import { GlassPanel, useColors, GlassColors } from '../components/Glass';
 
 type Job = {
   id: string; title: string; description: string; location: string;
@@ -44,6 +44,8 @@ function parsePay(pay: string): number | null {
 }
 
 export default function JobOpeningsScreen({ navigation }: any) {
+  const C = useColors();
+  const styles = useMemo(() => makeStyles(C), [C]);
   const insets = useSafeAreaInsets();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,7 +144,7 @@ export default function JobOpeningsScreen({ navigation }: any) {
       .update({
         title: editTitle,
         description: editDescription,
-        location: editLocation,
+        location: editLocation.trim() || null,
         pay: editPay,
         type: editType,
         job_date: editDate ? editDate.toISOString().split('T')[0] : null,
@@ -172,7 +174,7 @@ export default function JobOpeningsScreen({ navigation }: any) {
     d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator size="large" color={GLASS.accent} /></View>;
+    return <View style={styles.center}><ActivityIndicator size="large" color={C.accent} /></View>;
   }
 
   return (
@@ -221,7 +223,7 @@ export default function JobOpeningsScreen({ navigation }: any) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => { setRefreshing(true); fetchJobs(); }}
-              tintColor={GLASS.accent}
+              tintColor={C.accent}
             />
           }
           ListEmptyComponent={
@@ -293,7 +295,7 @@ export default function JobOpeningsScreen({ navigation }: any) {
               <Text style={styles.label}>Job Title *</Text>
               <GlassPanel style={styles.inputWrap}>
                 <TextInput style={styles.input} value={editTitle} onChangeText={setEditTitle}
-                  placeholderTextColor={GLASS.textMuted} placeholder="Job title" />
+                  placeholderTextColor={C.textMuted} placeholder="Job title" />
               </GlassPanel>
 
               <Text style={styles.label}>Job Type</Text>
@@ -319,20 +321,20 @@ export default function JobOpeningsScreen({ navigation }: any) {
               <Text style={styles.label}>Description *</Text>
               <GlassPanel style={styles.inputWrap}>
                 <TextInput style={[styles.input, styles.textArea]} value={editDescription}
-                  onChangeText={setEditDescription} placeholderTextColor={GLASS.textMuted}
+                  onChangeText={setEditDescription} placeholderTextColor={C.textMuted}
                   placeholder="Job description" multiline numberOfLines={5} />
               </GlassPanel>
 
               <Text style={styles.label}>Location</Text>
               <GlassPanel style={styles.inputWrap}>
                 <TextInput style={styles.input} value={editLocation} onChangeText={setEditLocation}
-                  placeholderTextColor={GLASS.textMuted} placeholder="e.g. Los Angeles, CA" />
+                  placeholderTextColor={C.textMuted} placeholder="e.g. Los Angeles, CA" />
               </GlassPanel>
 
               <Text style={styles.label}>Pay</Text>
               <GlassPanel style={styles.inputWrap}>
                 <TextInput style={styles.input} value={editPay} onChangeText={setEditPay}
-                  placeholderTextColor={GLASS.textMuted} placeholder="e.g. $500 / day" />
+                  placeholderTextColor={C.textMuted} placeholder="e.g. $500 / day" />
               </GlassPanel>
 
               <TouchableOpacity
@@ -468,68 +470,68 @@ export default function JobOpeningsScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: GlassColors) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: 'transparent', paddingHorizontal: 14 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: { borderRadius: 18, marginBottom: 12, paddingHorizontal: 16, paddingVertical: 14 },
-  back: { color: GLASS.accent, fontSize: 15, marginBottom: 4 },
-  heading: { fontSize: 22, fontWeight: '700', color: GLASS.text },
+  back: { color: C.accent, fontSize: Math.round(15 * C.textScale), marginBottom: 4 },
+  heading: { fontSize: Math.round(22 * C.textScale), fontWeight: '700', color: C.text },
   list: { paddingBottom: 32, gap: 10 },
   card: { borderRadius: 16 },
   cardHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 2, padding: 16, paddingBottom: 0 },
   cardTitleBlock: { flex: 1, marginRight: 8 },
   cardHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  title: { fontSize: 16, fontWeight: '700', color: GLASS.text, marginBottom: 2 },
-  postedBy: { fontSize: 12, color: GLASS.textMuted, marginBottom: 6 },
-  editButton: { backgroundColor: GLASS.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
-  editButtonText: { fontSize: 12, fontWeight: '600', color: GLASS.accent },
-  chevron: { fontSize: 12, color: GLASS.textMuted, marginTop: 2 },
-  divider: { height: 1, backgroundColor: GLASS.border, marginVertical: 10, marginHorizontal: 16 },
-  descriptionFull: { fontSize: 14, color: GLASS.textSub, lineHeight: 21, paddingHorizontal: 16, paddingBottom: 16 },
+  title: { fontSize: Math.round(16 * C.textScale), fontWeight: '700', color: C.text, marginBottom: 2 },
+  postedBy: { fontSize: Math.round(12 * C.textScale), color: C.textMuted, marginBottom: 6 },
+  editButton: { backgroundColor: C.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  editButtonText: { fontSize: Math.round(12 * C.textScale), fontWeight: '600', color: C.accent },
+  chevron: { fontSize: Math.round(12 * C.textScale), color: C.textMuted, marginTop: 2 },
+  divider: { height: 1, backgroundColor: C.border, marginVertical: 10, marginHorizontal: 16 },
+  descriptionFull: { fontSize: Math.round(14 * C.textScale), color: C.textSub, lineHeight: 21, paddingHorizontal: 16, paddingBottom: 16 },
   emptyCard: { borderRadius: 20, alignItems: 'center', padding: 40, marginTop: 40 },
-  emptyText: { color: GLASS.textSub, fontSize: 16 },
+  emptyText: { color: C.textSub, fontSize: Math.round(16 * C.textScale) },
 
   // Edit modal
   editOverlay: { flex: 1, justifyContent: 'flex-end' },
   editSheet: { borderRadius: 24, marginHorizontal: 0, maxHeight: '90%' },
-  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: GLASS.border },
-  sheetTitle: { fontSize: 17, fontWeight: '600', color: GLASS.text },
-  sheetCancel: { color: GLASS.accent, fontSize: 16, fontWeight: '600' },
-  label: { fontSize: 13, fontWeight: '600', color: GLASS.textSub, marginBottom: 6, marginTop: 14, marginHorizontal: 20 },
+  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: C.border },
+  sheetTitle: { fontSize: Math.round(17 * C.textScale), fontWeight: '600', color: C.text },
+  sheetCancel: { color: C.accent, fontSize: Math.round(16 * C.textScale), fontWeight: '600' },
+  label: { fontSize: Math.round(13 * C.textScale), fontWeight: '600', color: C.textSub, marginBottom: 6, marginTop: 14, marginHorizontal: 20 },
   inputWrap: { borderRadius: 14, marginHorizontal: 16 },
-  input: { paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: GLASS.text },
+  input: { paddingHorizontal: 14, paddingVertical: 13, fontSize: Math.round(15 * C.textScale), color: C.text },
   textArea: { height: 110, textAlignVertical: 'top' },
   picker: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, marginHorizontal: 16 },
-  pickerValue: { fontSize: 15, color: GLASS.text, flex: 1 },
-  pickerPlaceholder: { fontSize: 15, color: GLASS.textMuted, flex: 1 },
-  pickerChevron: { fontSize: 16, color: GLASS.textSub },
-  saveButton: { backgroundColor: GLASS.accent, paddingVertical: 15, borderRadius: 14, alignItems: 'center', marginTop: 24, marginHorizontal: 16 },
+  pickerValue: { fontSize: Math.round(15 * C.textScale), color: C.text, flex: 1 },
+  pickerPlaceholder: { fontSize: Math.round(15 * C.textScale), color: C.textMuted, flex: 1 },
+  pickerChevron: { fontSize: Math.round(16 * C.textScale), color: C.textSub },
+  saveButton: { backgroundColor: C.accent, paddingVertical: 15, borderRadius: 14, alignItems: 'center', marginTop: 24, marginHorizontal: 16 },
   buttonDisabled: { opacity: 0.6 },
-  saveButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  saveButtonText: { color: '#fff', fontSize: Math.round(16 * C.textScale), fontWeight: '700' },
   deleteButton: { alignItems: 'center', marginTop: 12, paddingVertical: 10, marginBottom: 4 },
-  deleteButtonText: { color: '#FF3B30', fontSize: 15, fontWeight: '600' },
+  deleteButtonText: { color: '#FF3B30', fontSize: Math.round(15 * C.textScale), fontWeight: '600' },
 
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  typeTag: { fontSize: 11, fontWeight: '700', color: GLASS.accent, textTransform: 'uppercase', letterSpacing: 0.7, backgroundColor: GLASS.border, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  typeTag: { fontSize: Math.round(11 * C.textScale), fontWeight: '700', color: C.accent, textTransform: 'uppercase', letterSpacing: 0.7, backgroundColor: C.accentSubtle, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
 
   // Card facts
   metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', paddingHorizontal: 16, paddingBottom: 12, gap: 4 },
-  metaDot: { fontSize: 12, color: GLASS.textMuted, marginHorizontal: 2 },
-  metaChip: { fontSize: 13, color: GLASS.textSub },
+  metaDot: { fontSize: Math.round(12 * C.textScale), color: C.textMuted, marginHorizontal: 2 },
+  metaChip: { fontSize: Math.round(13 * C.textScale), color: C.textSub },
 
   // Sub-pickers
   modalOverlay: { flex: 1 },
   pickerSheet: { borderRadius: 24, marginHorizontal: 12, marginBottom: 12, maxHeight: '55%' },
-  typeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: GLASS.border },
-  typeText: { fontSize: 16, color: GLASS.textSub },
-  typeSelected: { color: GLASS.text, fontWeight: '600' },
-  checkmark: { color: GLASS.accent, fontSize: 16, fontWeight: '700' },
+  typeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.border },
+  typeText: { fontSize: Math.round(16 * C.textScale), color: C.textSub },
+  typeSelected: { color: C.text, fontWeight: '600' },
+  checkmark: { color: C.accent, fontSize: Math.round(16 * C.textScale), fontWeight: '700' },
 
   headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  clearFilters: { color: GLASS.accent, fontSize: 13, fontWeight: '600' },
+  clearFilters: { color: C.accent, fontSize: Math.round(13 * C.textScale), fontWeight: '600' },
   filterRow: { flexDirection: 'row', gap: 8 },
-  filterChip: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: 'rgba(0,0,0,0.06)', borderWidth: 1, borderColor: GLASS.border },
-  filterChipActive: { backgroundColor: GLASS.accent, borderColor: GLASS.accent },
-  filterChipText: { fontSize: 13, fontWeight: '600', color: GLASS.textSub },
+  filterChip: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: C.accentSubtle, borderWidth: 1, borderColor: C.border },
+  filterChipActive: { backgroundColor: C.accent, borderColor: C.accent },
+  filterChipText: { fontSize: Math.round(13 * C.textScale), fontWeight: '600', color: C.textSub },
   filterChipTextActive: { color: '#fff' },
 });

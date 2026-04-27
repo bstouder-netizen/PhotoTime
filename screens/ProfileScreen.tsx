@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, Alert, Image, Linking, Switch, Modal,
@@ -7,7 +7,7 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
-import { GlassPanel, GLASS } from '../components/Glass';
+import { GlassPanel, useColors, GlassColors } from '../components/Glass';
 
 const DEFAULT_LOCATION_PHOTO = 'https://picsum.photos/seed/photolocation/600/400';
 
@@ -51,7 +51,12 @@ const EMPTY = {
   location: '', zip_code: '', email: '', email_public: false, website: '',
 };
 
-export default function ProfileScreen({ navigation }: any) {
+export default function ProfileScreen({ navigation, route }: any) {
+  const C = useColors();
+  const styles = useMemo(() => makeStyles(C), [C]);
+  const viewDeviceId: string | undefined = route?.params?.viewDeviceId;
+  const isViewingOther = !!viewDeviceId;
+
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [form, setForm] = useState({ ...EMPTY });
@@ -79,10 +84,12 @@ export default function ProfileScreen({ navigation }: any) {
     fetchProfile();
     getDeviceId().then(id => {
       setCurrentDeviceId(id);
-      fetchEndorsements(id);
-      fetchProfileLocations(id);
+      // For other users' profiles, load their data; endorsements/locations use the target device
+      const targetId = viewDeviceId ?? id;
+      fetchEndorsements(targetId);
+      fetchProfileLocations(targetId);
     });
-  }, []);
+  }, [viewDeviceId]);
 
   const fetchProfileLocations = async (deviceId: string) => {
     const { data } = await supabase
@@ -169,9 +176,10 @@ export default function ProfileScreen({ navigation }: any) {
   const handleEndorse = async () => {
     if (!endorseText.trim()) { Alert.alert('Required', 'Please write something before submitting.'); return; }
     setEndorseSubmitting(true);
+    const targetDeviceId = viewDeviceId ?? currentDeviceId;
     const endorserName = (await supabase.from('profiles').select('username').eq('device_id', currentDeviceId).single()).data?.username ?? 'Anonymous';
     const { error } = await supabase.from('endorsements').insert([{
-      profile_device_id: currentDeviceId,
+      profile_device_id: targetDeviceId,
       endorser_device_id: currentDeviceId,
       endorser_name: endorserName,
       text: endorseText.trim(),
@@ -180,13 +188,14 @@ export default function ProfileScreen({ navigation }: any) {
     if (error) { Alert.alert('Error', error.message); return; }
     setEndorseText('');
     setEndorseModalVisible(false);
-    fetchEndorsements(currentDeviceId);
+    fetchEndorsements(targetDeviceId);
   };
 
   const fetchProfile = async () => {
     setLoading(true);
-    const deviceId = await getDeviceId();
-    const { data } = await supabase.from('profiles').select('*').eq('device_id', deviceId).single();
+    const myDeviceId = await getDeviceId();
+    const targetId = viewDeviceId ?? myDeviceId;
+    const { data } = await supabase.from('profiles').select('*').eq('device_id', targetId).single();
     if (data) {
       setProfile(data);
       setForm({
@@ -252,7 +261,7 @@ export default function ProfileScreen({ navigation }: any) {
     if (!form.username.trim()) { Alert.alert('Required', 'User Name is required.'); return; }
     setSaving(true);
     const deviceId = await getDeviceId();
-    const payload = { ...form, device_id: deviceId };
+    const payload = { ...form, device_id: deviceId, location: form.location.trim() || null };
     let error;
     if (profile?.id) {
       ({ error } = await supabase.from('profiles').update(payload).eq('id', profile.id));
@@ -270,7 +279,7 @@ export default function ProfileScreen({ navigation }: any) {
     return (
       <View style={[styles.screen, { paddingTop: insets.top }]}>
         <Header navigation={navigation} />
-        <View style={styles.center}><ActivityIndicator size="large" color={GLASS.accent} /></View>
+        <View style={styles.center}><ActivityIndicator size="large" color={C.accent} /></View>
       </View>
     );
   }
@@ -314,7 +323,7 @@ export default function ProfileScreen({ navigation }: any) {
           { label: 'User Name *', key: 'username', placeholder: '@username', cap: 'none' as const },
           { label: 'Person Name', key: 'person_name', placeholder: 'Your full name', cap: 'words' as const },
           { label: 'Business Name', key: 'business_name', placeholder: 'Your studio or business name', cap: 'words' as const },
-          { label: 'Location', key: 'location', placeholder: 'City, State', cap: 'words' as const },
+          { label: 'Location', key: 'location', placeholder: 'e.g. Portland, OR', cap: 'words' as const },
           { label: 'Zip Code', key: 'zip_code', placeholder: 'e.g. 90210', cap: 'none' as const },
         ].map(f => (
           <View key={f.key}>
@@ -323,7 +332,7 @@ export default function ProfileScreen({ navigation }: any) {
               <TextInput
                 style={styles.input}
                 placeholder={f.placeholder}
-                placeholderTextColor={GLASS.textMuted}
+                placeholderTextColor={C.textMuted}
                 value={(form as any)[f.key]}
                 onChangeText={v => setForm(prev => ({ ...prev, [f.key]: v }))}
                 autoCapitalize={f.cap}
@@ -338,7 +347,7 @@ export default function ProfileScreen({ navigation }: any) {
         <GlassPanel style={styles.inputWrap}>
           <TextInput
             style={styles.input} placeholder="you@example.com"
-            placeholderTextColor={GLASS.textMuted}
+            placeholderTextColor={C.textMuted}
             value={form.email} onChangeText={v => setForm(f => ({ ...f, email: v }))}
             keyboardType="email-address" autoCapitalize="none"
           />
@@ -351,7 +360,7 @@ export default function ProfileScreen({ navigation }: any) {
           <Switch
             value={form.email_public}
             onValueChange={v => setForm(f => ({ ...f, email_public: v }))}
-            trackColor={{ false: 'rgba(255,255,255,0.2)', true: GLASS.accent }}
+            trackColor={{ false: 'rgba(255,255,255,0.2)', true: C.accent }}
             thumbColor="#fff"
           />
         </GlassPanel>
@@ -360,7 +369,7 @@ export default function ProfileScreen({ navigation }: any) {
         <GlassPanel style={styles.inputWrap}>
           <TextInput
             style={styles.input} placeholder="https://yoursite.com"
-            placeholderTextColor={GLASS.textMuted}
+            placeholderTextColor={C.textMuted}
             value={form.website} onChangeText={v => setForm(f => ({ ...f, website: v }))}
             keyboardType="url" autoCapitalize="none"
           />
@@ -378,7 +387,7 @@ export default function ProfileScreen({ navigation }: any) {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <Header navigation={navigation} onEdit={() => setEditing(true)} />
+      <Header navigation={navigation} onEdit={isViewingOther ? undefined : () => setEditing(true)} />
 
       <GlassPanel style={styles.identityRow}>
         {profile?.profile_pic
@@ -406,9 +415,11 @@ export default function ProfileScreen({ navigation }: any) {
 
       {tab === 'locations' ? (
         <ScrollView contentContainerStyle={[styles.locContainer, { paddingBottom: insets.bottom + 90 }]}>
-          <TouchableOpacity style={styles.addLocBtn} onPress={() => setLocModalVisible(true)}>
-            <Text style={styles.addLocBtnText}>＋  Add a Location</Text>
-          </TouchableOpacity>
+          {!isViewingOther && (
+            <TouchableOpacity style={styles.addLocBtn} onPress={() => setLocModalVisible(true)}>
+              <Text style={styles.addLocBtnText}>＋  Add a Location</Text>
+            </TouchableOpacity>
+          )}
           {profileLocations.length === 0 ? (
             <GlassPanel style={styles.emptyEndorse}>
               <Text style={styles.emptyEndorseText}>No locations added yet.</Text>
@@ -427,9 +438,11 @@ export default function ProfileScreen({ navigation }: any) {
                     {loc.address ? <Text style={styles.locAddress}>📍 {loc.address}</Text> : null}
                     {loc.description ? <Text style={styles.locDesc}>{loc.description}</Text> : null}
                   </View>
-                  <TouchableOpacity onPress={() => handleDeleteLocation(loc.id)} style={styles.locDelete}>
-                    <Text style={styles.locDeleteText}>✕</Text>
-                  </TouchableOpacity>
+                  {!isViewingOther && (
+                    <TouchableOpacity onPress={() => handleDeleteLocation(loc.id)} style={styles.locDelete}>
+                      <Text style={styles.locDeleteText}>✕</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </GlassPanel>
             ))
@@ -489,24 +502,37 @@ export default function ProfileScreen({ navigation }: any) {
         </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={[styles.portfolioContainer, { paddingBottom: insets.bottom + 90 }]}>
-          <Text style={styles.portfolioHint}>Tap a slot to upload a photo</Text>
+          {!isViewingOther && (
+            <Text style={styles.portfolioHint}>Tap a slot to upload a photo</Text>
+          )}
           <View style={styles.portfolioGrid}>
-            {portfolioPics.map((uri, i) => (
-              <TouchableOpacity key={i} style={styles.portfolioSlot} onPress={() => pickPortfolioImage(i)} activeOpacity={0.75}>
+            {portfolioPics.map((uri, i) => {
+              const slot = (
                 <GlassPanel style={styles.portfolioPanel}>
                   {portfolioUploading[i] ? (
-                    <ActivityIndicator color={GLASS.accent} />
+                    <ActivityIndicator color={C.accent} />
                   ) : uri ? (
                     <Image source={{ uri }} style={styles.portfolioImage} />
                   ) : (
-                    <>
-                      <Text style={styles.portfolioEmptyIcon}>+</Text>
-                      <Text style={styles.portfolioEmptyLabel}>Photo {i + 1}</Text>
-                    </>
+                    !isViewingOther ? (
+                      <>
+                        <Text style={styles.portfolioEmptyIcon}>+</Text>
+                        <Text style={styles.portfolioEmptyLabel}>Photo {i + 1}</Text>
+                      </>
+                    ) : null
                   )}
                 </GlassPanel>
-              </TouchableOpacity>
-            ))}
+              );
+              return isViewingOther ? (
+                uri ? (
+                  <View key={i} style={styles.portfolioSlot}>{slot}</View>
+                ) : null
+              ) : (
+                <TouchableOpacity key={i} style={styles.portfolioSlot} onPress={() => pickPortfolioImage(i)} activeOpacity={0.75}>
+                  {slot}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </ScrollView>
       )}
@@ -521,7 +547,7 @@ export default function ProfileScreen({ navigation }: any) {
         submitting={endorseSubmitting}
       />
 
-      <Modal visible={locModalVisible} transparent animationType="slide">
+      <Modal visible={!isViewingOther && locModalVisible} transparent animationType="slide">
         <View style={styles.locOverlay}>
           <GlassPanel style={{ ...styles.locSheet, paddingBottom: insets.bottom + 16 }}>
             <View style={styles.locSheetHeader}>
@@ -543,19 +569,19 @@ export default function ProfileScreen({ navigation }: any) {
               <Text style={styles.label}>Location Name *</Text>
               <GlassPanel style={styles.inputWrap}>
                 <TextInput style={styles.input} value={locName} onChangeText={setLocName}
-                  placeholder="e.g. Riverside Park" placeholderTextColor={GLASS.textMuted} />
+                  placeholder="e.g. Riverside Park" placeholderTextColor={C.textMuted} />
               </GlassPanel>
               <Text style={styles.label}>Address</Text>
               <GlassPanel style={styles.inputWrap}>
                 <TextInput style={styles.input} value={locAddress} onChangeText={setLocAddress}
-                  placeholder="Street, City, State" placeholderTextColor={GLASS.textMuted} />
+                  placeholder="Street, City, State" placeholderTextColor={C.textMuted} />
               </GlassPanel>
               <Text style={styles.label}>Notes</Text>
               <GlassPanel style={styles.inputWrap}>
                 <TextInput style={[styles.input, { height: 90, textAlignVertical: 'top' }]}
                   value={locDescription} onChangeText={setLocDescription}
                   placeholder="Best time to shoot, what to look for..."
-                  placeholderTextColor={GLASS.textMuted} multiline numberOfLines={4} />
+                  placeholderTextColor={C.textMuted} multiline numberOfLines={4} />
               </GlassPanel>
               <TouchableOpacity
                 style={[styles.button, styles.saveBtn, locSaving && styles.buttonDisabled]}
@@ -577,6 +603,8 @@ function EndorseModal({
   visible: boolean; onClose: () => void; profileName: string; profilePic: string | null;
   text: string; onChangeText: (v: string) => void; onSubmit: () => void; submitting: boolean;
 }) {
+  const C = useColors();
+  const eStyles = useMemo(() => makeEStyles(C), [C]);
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide">
@@ -596,7 +624,7 @@ function EndorseModal({
             <TextInput
               style={eStyles.input}
               placeholder={`Write your endorsement here…\nTell others what made collaborating with ${profileName} special.`}
-              placeholderTextColor={GLASS.textMuted}
+              placeholderTextColor={C.textMuted}
               value={text}
               onChangeText={onChangeText}
               multiline
@@ -618,25 +646,27 @@ function EndorseModal({
   );
 }
 
-const eStyles = StyleSheet.create({
+const makeEStyles = (C: GlassColors) => StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)' },
   sheet: { borderRadius: 28, marginHorizontal: 0, paddingHorizontal: 24, paddingTop: 32 },
   closeBtn: { position: 'absolute', top: 16, right: 20, zIndex: 10, padding: 6 },
-  closeText: { fontSize: 16, color: GLASS.textMuted, fontWeight: '600' },
+  closeText: { fontSize: Math.round(16 * C.textScale), color: C.textMuted, fontWeight: '600' },
   avatarWrap: { alignItems: 'center', marginBottom: 16 },
-  avatar: { width: 80, height: 80, borderRadius: 40, borderWidth: 3, borderColor: GLASS.accent },
-  avatarPlaceholder: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: GLASS.accent },
-  avatarPlaceholderText: { fontSize: 14, color: GLASS.textMuted, fontWeight: '600' },
-  heading: { fontSize: 22, fontWeight: '700', color: GLASS.text, textAlign: 'center', marginBottom: 6 },
-  subheading: { fontSize: 14, color: GLASS.textSub, textAlign: 'center', marginBottom: 20, lineHeight: 20 },
+  avatar: { width: 80, height: 80, borderRadius: 40, borderWidth: 3, borderColor: C.accent },
+  avatarPlaceholder: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: C.accent },
+  avatarPlaceholderText: { fontSize: Math.round(14 * C.textScale), color: C.textMuted, fontWeight: '600' },
+  heading: { fontSize: Math.round(22 * C.textScale), fontWeight: '700', color: C.text, textAlign: 'center', marginBottom: 6 },
+  subheading: { fontSize: Math.round(14 * C.textScale), color: C.textSub, textAlign: 'center', marginBottom: 20, lineHeight: 20 },
   inputWrap: { borderRadius: 16, marginBottom: 20 },
-  input: { paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: GLASS.text, minHeight: 130, textAlignVertical: 'top' },
-  submitBtn: { backgroundColor: GLASS.accent, paddingVertical: 16, borderRadius: 14, alignItems: 'center' },
+  input: { paddingHorizontal: 16, paddingVertical: 14, fontSize: Math.round(15 * C.textScale), color: C.text, minHeight: 130, textAlignVertical: 'top' },
+  submitBtn: { backgroundColor: C.accent, paddingVertical: 16, borderRadius: 14, alignItems: 'center' },
   submitDisabled: { opacity: 0.6 },
-  submitText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  submitText: { color: '#fff', fontSize: Math.round(16 * C.textScale), fontWeight: '700' },
 });
 
 function InfoRow({ label, value }: { label: string; value: string }) {
+  const C = useColors();
+  const styles = useMemo(() => makeStyles(C), [C]);
   return (
     <GlassPanel style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
@@ -646,6 +676,8 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 function Header({ navigation, onEdit }: { navigation: any; onEdit?: () => void }) {
+  const C = useColors();
+  const styles = useMemo(() => makeStyles(C), [C]);
   return (
     <GlassPanel style={styles.header}>
       <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -659,19 +691,19 @@ function Header({ navigation, onEdit }: { navigation: any; onEdit?: () => void }
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: GlassColors) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: 'transparent', paddingHorizontal: 14 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
 
   header: { borderRadius: 18, marginBottom: 12, paddingHorizontal: 16, paddingVertical: 14 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  back: { color: GLASS.accent, fontSize: 15, marginBottom: 4 },
-  heading: { fontSize: 22, fontWeight: '700', color: GLASS.text },
-  editLink: { color: GLASS.accent, fontSize: 15, fontWeight: '600' },
+  back: { color: C.accent, fontSize: Math.round(15 * C.textScale), marginBottom: 4 },
+  heading: { fontSize: Math.round(22 * C.textScale), fontWeight: '700', color: C.text },
+  editLink: { color: C.accent, fontSize: Math.round(15 * C.textScale), fontWeight: '600' },
 
   noProfileCard: { alignItems: 'center', borderRadius: 24, padding: 36 },
-  noProfileText: { fontSize: 26, fontWeight: '700', color: GLASS.text, marginBottom: 8, marginTop: 16 },
-  subtext: { fontSize: 15, color: GLASS.textSub, textAlign: 'center', marginBottom: 28 },
+  noProfileText: { fontSize: Math.round(26 * C.textScale), fontWeight: '700', color: C.text, marginBottom: 8, marginTop: 16 },
+  subtext: { fontSize: Math.round(15 * C.textScale), color: C.textSub, textAlign: 'center', marginBottom: 28 },
 
   identityRow: {
     flexDirection: 'row', alignItems: 'center',
@@ -681,110 +713,110 @@ const styles = StyleSheet.create({
   identityText: { flex: 1 },
   avatarCircle: {
     width: 72, height: 72, borderRadius: 36,
-    borderWidth: 1.5, borderColor: GLASS.border,
+    borderWidth: 1.5, borderColor: C.border,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.1)',
   },
   avatar: { width: 72, height: 72, borderRadius: 36 },
-  avatarLabel: { fontSize: 16, color: GLASS.textMuted, fontWeight: '600' },
-  username: { fontSize: 18, fontWeight: '700', color: GLASS.text, marginBottom: 2 },
-  personName: { fontSize: 15, color: GLASS.textSub, marginBottom: 2 },
-  businessName: { fontSize: 14, color: GLASS.textSub, marginBottom: 2 },
-  locationText: { fontSize: 13, color: GLASS.textMuted, marginTop: 2 },
+  avatarLabel: { fontSize: Math.round(16 * C.textScale), color: C.textMuted, fontWeight: '600' },
+  username: { fontSize: Math.round(18 * C.textScale), fontWeight: '700', color: C.text, marginBottom: 2 },
+  personName: { fontSize: Math.round(15 * C.textScale), color: C.textSub, marginBottom: 2 },
+  businessName: { fontSize: Math.round(14 * C.textScale), color: C.textSub, marginBottom: 2 },
+  locationText: { fontSize: Math.round(13 * C.textScale), color: C.textMuted, marginTop: 2 },
 
   tabBar: { flexDirection: 'row', borderRadius: 14, marginBottom: 10, overflow: 'hidden' },
   tabItem: { flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabItemActive: { borderBottomColor: GLASS.accent },
-  tabLabel: { fontSize: 15, fontWeight: '600', color: GLASS.textSub },
-  tabLabelActive: { color: GLASS.text },
+  tabItemActive: { borderBottomColor: C.accent, borderBottomWidth: 2 },
+  tabLabel: { fontSize: Math.round(15 * C.textScale), fontWeight: '600', color: C.textSub },
+  tabLabelActive: { color: C.text },
 
   infoContainer: { paddingBottom: 32 },
   infoRow: { borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 8 },
-  infoLabel: { fontSize: 11, fontWeight: '700', color: GLASS.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
-  infoValue: { fontSize: 16, color: GLASS.text },
+  infoLabel: { fontSize: Math.round(11 * C.textScale), fontWeight: '700', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+  infoValue: { fontSize: Math.round(16 * C.textScale), color: C.text },
 
   contactSectionLabel: {
-    fontSize: 11, fontWeight: '700', letterSpacing: 1.2,
-    color: GLASS.textMuted, textTransform: 'uppercase',
+    fontSize: Math.round(11 * C.textScale), fontWeight: '700', letterSpacing: 1.2,
+    color: C.accent, textTransform: 'uppercase',
     marginTop: 16, marginBottom: 8, marginLeft: 2,
   },
   contactRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 8 },
-  contactIcon: { fontSize: 20, marginRight: 12 },
+  contactIcon: { fontSize: Math.round(20 * C.textScale), marginRight: 12 },
   contactText: { flex: 1 },
-  contactLabel: { fontSize: 11, fontWeight: '600', color: GLASS.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
-  contactValue: { fontSize: 15, color: GLASS.accent },
-  contactArrow: { fontSize: 22, color: GLASS.textMuted, marginLeft: 8 },
+  contactLabel: { fontSize: Math.round(11 * C.textScale), fontWeight: '600', color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+  contactValue: { fontSize: Math.round(15 * C.textScale), color: C.accent },
+  contactArrow: { fontSize: Math.round(22 * C.textScale), color: C.textMuted, marginLeft: 8 },
 
   portfolioContainer: { paddingBottom: 32 },
-  portfolioHint: { fontSize: 13, color: GLASS.textMuted, textAlign: 'center', marginBottom: 16 },
+  portfolioHint: { fontSize: Math.round(13 * C.textScale), color: C.textMuted, textAlign: 'center', marginBottom: 16 },
   portfolioGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   portfolioSlot: {
     width: '47%', aspectRatio: 1, borderRadius: 16,
-    overflow: 'hidden', borderWidth: 1, borderColor: GLASS.border,
+    overflow: 'hidden', borderWidth: 1, borderColor: C.border,
   },
   portfolioPanel: {
     flex: 1, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
   },
   portfolioImage: { width: '100%', height: '100%', borderRadius: 16 },
-  portfolioEmptyIcon: { fontSize: 32, color: GLASS.textMuted, lineHeight: 36 },
-  portfolioEmptyLabel: { fontSize: 12, color: GLASS.textMuted, marginTop: 4 },
+  portfolioEmptyIcon: { fontSize: Math.round(32 * C.textScale), color: C.textMuted, lineHeight: 36 },
+  portfolioEmptyLabel: { fontSize: Math.round(12 * C.textScale), color: C.textMuted, marginTop: 4 },
 
-  button: { backgroundColor: GLASS.accent, paddingVertical: 14, paddingHorizontal: 36, borderRadius: 14, alignItems: 'center' },
+  button: { backgroundColor: C.accent, paddingVertical: 14, paddingHorizontal: 36, borderRadius: 14, alignItems: 'center' },
   saveBtn: { marginTop: 24 },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  buttonText: { color: '#fff', fontSize: Math.round(15 * C.textScale), fontWeight: '700' },
   cancelButton: { alignItems: 'center', marginTop: 14, paddingVertical: 10 },
-  cancelText: { color: GLASS.textSub, fontSize: 15 },
+  cancelText: { color: C.textSub, fontSize: Math.round(15 * C.textScale) },
 
   formContainer: { paddingHorizontal: 20, paddingBottom: 40 },
-  formHeading: { fontSize: 22, fontWeight: '700', color: GLASS.text, marginBottom: 4 },
-  label: { fontSize: 13, fontWeight: '600', color: GLASS.textSub, marginBottom: 6, marginTop: 14 },
+  formHeading: { fontSize: Math.round(22 * C.textScale), fontWeight: '700', color: C.text, marginBottom: 4 },
+  label: { fontSize: Math.round(13 * C.textScale), fontWeight: '600', color: C.textSub, marginBottom: 6, marginTop: 14 },
   inputWrap: { borderRadius: 14 },
-  input: { paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: GLASS.text },
+  input: { paddingHorizontal: 14, paddingVertical: 13, fontSize: Math.round(15 * C.textScale), color: C.text },
   avatarPicker: { alignItems: 'center', marginTop: 4 },
   avatarPreview: { width: 100, height: 100, borderRadius: 50, marginBottom: 8 },
   avatarPlaceholder: {
     width: 100, height: 100, borderRadius: 50,
     backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 8,
-    borderWidth: 1, borderColor: GLASS.border,
+    borderWidth: 1, borderColor: C.border,
   },
-  avatarPlaceholderText: { fontSize: 14, color: GLASS.textMuted },
-  changePhotoText: { color: GLASS.accent, fontSize: 14, fontWeight: '600' },
+  avatarPlaceholderText: { fontSize: Math.round(14 * C.textScale), color: C.textMuted },
+  changePhotoText: { color: C.accent, fontSize: Math.round(14 * C.textScale), fontWeight: '600' },
   locOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.3)' },
   locSheet: { borderRadius: 28, marginHorizontal: 0, paddingHorizontal: 20, paddingTop: 20, maxHeight: '75%' },
-  locSheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: GLASS.border },
-  locSheetTitle: { fontSize: 17, fontWeight: '700', color: GLASS.text },
-  locSheetCancel: { color: GLASS.accent, fontSize: 15, fontWeight: '600' },
+  locSheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: C.border },
+  locSheetTitle: { fontSize: Math.round(17 * C.textScale), fontWeight: '700', color: C.text },
+  locSheetCancel: { color: C.accent, fontSize: Math.round(15 * C.textScale), fontWeight: '600' },
 
   locContainer: { paddingBottom: 32, gap: 10 },
-  addLocBtn: { backgroundColor: GLASS.accent, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
-  addLocBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  addLocBtn: { backgroundColor: C.accent, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
+  addLocBtnText: { color: '#fff', fontSize: Math.round(15 * C.textScale), fontWeight: '700' },
   locCard: { borderRadius: 14, overflow: 'hidden' },
   locPhoto: { width: '100%', height: 140 },
   locCardRow: { flexDirection: 'row', alignItems: 'flex-start', padding: 12 },
-  locName: { fontSize: 15, fontWeight: '700', color: GLASS.text, marginBottom: 3 },
-  locAddress: { fontSize: 13, color: GLASS.textSub, marginBottom: 3 },
-  locDesc: { fontSize: 13, color: GLASS.textMuted, lineHeight: 18 },
+  locName: { fontSize: Math.round(15 * C.textScale), fontWeight: '700', color: C.text, marginBottom: 3 },
+  locAddress: { fontSize: Math.round(13 * C.textScale), color: C.textSub, marginBottom: 3 },
+  locDesc: { fontSize: Math.round(13 * C.textScale), color: C.textMuted, lineHeight: 18 },
   locDelete: { paddingLeft: 10, paddingTop: 2 },
-  locDeleteText: { fontSize: 14, color: GLASS.textMuted, fontWeight: '600' },
+  locDeleteText: { fontSize: Math.round(14 * C.textScale), color: C.textMuted, fontWeight: '600' },
   locPhotoPicker: { borderRadius: 14, overflow: 'hidden', height: 160, marginBottom: 4 },
   locPhotoPreview: { width: '100%', height: '100%' },
   locPhotoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.32)', alignItems: 'center', justifyContent: 'center' },
-  locPhotoOverlayText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  locPhotoOverlayText: { color: '#fff', fontSize: Math.round(15 * C.textScale), fontWeight: '700' },
 
   endorseContainer: { paddingBottom: 32, gap: 10 },
-  writeEndorseBtn: { backgroundColor: GLASS.accent, paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginBottom: 4 },
-  writeEndorseBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  writeEndorseBtn: { backgroundColor: C.accent, paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginBottom: 4 },
+  writeEndorseBtnText: { color: '#fff', fontSize: Math.round(15 * C.textScale), fontWeight: '700' },
   emptyEndorse: { borderRadius: 18, alignItems: 'center', padding: 36, marginTop: 20 },
-  emptyEndorseText: { color: GLASS.textSub, fontSize: 15 },
+  emptyEndorseText: { color: C.textSub, fontSize: Math.round(15 * C.textScale) },
   endorseCard: { borderRadius: 16, padding: 16 },
   endorseCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  endorseAuthor: { fontSize: 14, fontWeight: '700', color: GLASS.text },
-  endorseDate: { fontSize: 12, color: GLASS.textMuted },
-  endorseBody: { fontSize: 15, color: GLASS.textSub, lineHeight: 22 },
+  endorseAuthor: { fontSize: Math.round(14 * C.textScale), fontWeight: '700', color: C.text },
+  endorseDate: { fontSize: Math.round(12 * C.textScale), color: C.textMuted },
+  endorseBody: { fontSize: Math.round(15 * C.textScale), color: C.textSub, lineHeight: 22 },
 
   toggleRow: { borderRadius: 14, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, marginTop: 8 },
   toggleTextBlock: { flex: 1, marginRight: 12 },
-  toggleTitle: { fontSize: 15, color: GLASS.text, fontWeight: '500' },
-  toggleSub: { fontSize: 12, color: GLASS.textMuted, marginTop: 2 },
+  toggleTitle: { fontSize: Math.round(15 * C.textScale), color: C.text, fontWeight: '500' },
+  toggleSub: { fontSize: Math.round(12 * C.textScale), color: C.textMuted, marginTop: 2 },
 });

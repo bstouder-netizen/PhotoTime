@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   FlatList, Image, Modal, ActivityIndicator, Alert, ScrollView,
@@ -7,7 +7,7 @@ import MapView, { Marker, LongPressEvent } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
-import { GlassPanel, GLASS } from '../components/Glass';
+import { GlassPanel, useColors, GlassColors } from '../components/Glass';
 
 type ScoutedLocation = {
   id: string;
@@ -30,6 +30,8 @@ const DEFAULT_REGION = {
 };
 
 export default function LocationsScreen() {
+  const C = useColors();
+  const styles = useMemo(() => makeStyles(C), [C]);
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
 
@@ -150,14 +152,14 @@ export default function LocationsScreen() {
             <TextInput
               style={styles.searchInput}
               placeholder="Search parks, venues, cityscapes..."
-              placeholderTextColor={GLASS.textMuted}
+              placeholderTextColor={C.textMuted}
               value={search}
               onChangeText={handleSearchChange}
               onSubmitEditing={handleSearchSubmit}
               returnKeyType="search"
               clearButtonMode="while-editing"
             />
-            {geocoding ? <ActivityIndicator size="small" color={GLASS.accent} style={{ marginRight: 8 }} /> : null}
+            {geocoding ? <ActivityIndicator size="small" color={C.accent} style={{ marginRight: 8 }} /> : null}
           </GlassPanel>
         </View>
 
@@ -258,7 +260,7 @@ export default function LocationsScreen() {
               <Text style={styles.addLabel}>Location Name *</Text>
               <GlassPanel style={styles.inputWrap}>
                 <TextInput style={styles.input} value={addName} onChangeText={setAddName}
-                  placeholder="e.g. Waterfront Park" placeholderTextColor={GLASS.textMuted} />
+                  placeholder="e.g. Waterfront Park" placeholderTextColor={C.textMuted} />
               </GlassPanel>
 
               <Text style={styles.addLabel}>Description</Text>
@@ -266,13 +268,13 @@ export default function LocationsScreen() {
                 <TextInput style={[styles.input, styles.textArea]} value={addDescription}
                   onChangeText={setAddDescription}
                   placeholder="What makes this a great spot for photography?"
-                  placeholderTextColor={GLASS.textMuted} multiline numberOfLines={3} />
+                  placeholderTextColor={C.textMuted} multiline numberOfLines={3} />
               </GlassPanel>
 
               <Text style={styles.addLabel}>Address</Text>
               <GlassPanel style={styles.inputWrap}>
                 <TextInput style={styles.input} value={addAddress} onChangeText={setAddAddress}
-                  placeholder="Auto-filled from pin" placeholderTextColor={GLASS.textMuted} />
+                  placeholder="Auto-filled from pin" placeholderTextColor={C.textMuted} />
               </GlassPanel>
 
               <TouchableOpacity
@@ -292,59 +294,59 @@ export default function LocationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: GlassColors) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: 'transparent' },
 
   header: { paddingHorizontal: 16, paddingBottom: 8 },
-  heading: { fontSize: 26, fontWeight: '800', color: GLASS.text, marginBottom: 10 },
+  heading: { fontSize: Math.round(26 * C.textScale), fontWeight: '800', color: C.text, marginBottom: 10 },
   searchBar: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 },
-  searchIcon: { fontSize: 15, marginRight: 6 },
-  searchInput: { flex: 1, fontSize: 15, color: GLASS.text },
+  searchIcon: { fontSize: Math.round(15 * C.textScale), marginRight: 6 },
+  searchInput: { flex: 1, fontSize: Math.round(15 * C.textScale), color: C.text },
 
   map: { flex: 1 },
 
   marker: { alignItems: 'center', justifyContent: 'center' },
-  markerIcon: { fontSize: 28 },
+  markerIcon: { fontSize: Math.round(28 * C.textScale) },
 
   hintBar: { paddingHorizontal: 16, paddingVertical: 6 },
-  hintText: { fontSize: 11, color: GLASS.textMuted, textAlign: 'center' },
+  hintText: { fontSize: Math.round(11 * C.textScale), color: C.textMuted, textAlign: 'center' },
 
   detailCard: {
     margin: 12, borderRadius: 18, padding: 16,
   },
   detailRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  detailName: { fontSize: 17, fontWeight: '700', color: GLASS.text, marginBottom: 4 },
-  detailAddress: { fontSize: 13, color: GLASS.textSub, marginBottom: 4, lineHeight: 18 },
-  detailBy: { fontSize: 12, color: GLASS.textMuted, marginBottom: 6 },
-  detailDesc: { fontSize: 14, color: GLASS.textSub, lineHeight: 20, marginTop: 4 },
+  detailName: { fontSize: Math.round(17 * C.textScale), fontWeight: '700', color: C.text, marginBottom: 4 },
+  detailAddress: { fontSize: Math.round(13 * C.textScale), color: C.textSub, marginBottom: 4, lineHeight: 18 },
+  detailBy: { fontSize: Math.round(12 * C.textScale), color: C.textMuted, marginBottom: 6 },
+  detailDesc: { fontSize: Math.round(14 * C.textScale), color: C.textSub, lineHeight: 20, marginTop: 4 },
   detailPhoto: { width: 80, height: 80, borderRadius: 12, marginLeft: 12 },
   closeBtn: { position: 'absolute', top: 0, right: 0, padding: 4 },
-  closeText: { fontSize: 14, color: GLASS.textMuted, fontWeight: '600' },
+  closeText: { fontSize: Math.round(14 * C.textScale), color: C.textMuted, fontWeight: '600' },
 
   listSection: { paddingTop: 4 },
-  listLabel: { fontSize: 13, fontWeight: '700', color: GLASS.textSub, paddingHorizontal: 16, marginBottom: 8, letterSpacing: 0.3 },
+  listLabel: { fontSize: Math.round(13 * C.textScale), fontWeight: '700', color: C.accent, paddingHorizontal: 16, marginBottom: 8, letterSpacing: 0.3 },
   cardList: { paddingHorizontal: 12, paddingBottom: 16, gap: 10 },
   emptyCard: { paddingHorizontal: 20, paddingVertical: 16, marginLeft: 4 },
-  emptyText: { fontSize: 14, color: GLASS.textMuted },
+  emptyText: { fontSize: Math.round(14 * C.textScale), color: C.textMuted },
   locationCard: { width: 160, borderRadius: 16, overflow: 'hidden' },
   cardPhoto: { width: '100%', height: 100 },
   cardPhotoPlaceholder: { width: '100%', height: 100, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.04)' },
-  cardPlaceholderIcon: { fontSize: 28 },
+  cardPlaceholderIcon: { fontSize: Math.round(28 * C.textScale) },
   cardInfo: { padding: 10 },
-  cardName: { fontSize: 13, fontWeight: '700', color: GLASS.text, marginBottom: 2 },
-  cardAddress: { fontSize: 11, color: GLASS.textMuted },
+  cardName: { fontSize: Math.round(13 * C.textScale), fontWeight: '700', color: C.text, marginBottom: 2 },
+  cardAddress: { fontSize: Math.round(11 * C.textScale), color: C.textMuted },
 
   // Modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.3)' },
   addSheet: { borderRadius: 28, marginHorizontal: 0, paddingHorizontal: 20, paddingTop: 20, maxHeight: '75%' },
-  addHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: GLASS.border },
-  addTitle: { fontSize: 17, fontWeight: '700', color: GLASS.text },
-  addCancel: { color: GLASS.accent, fontSize: 15, fontWeight: '600' },
-  addLabel: { fontSize: 13, fontWeight: '600', color: GLASS.textSub, marginTop: 14, marginBottom: 6 },
+  addHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: C.border },
+  addTitle: { fontSize: Math.round(17 * C.textScale), fontWeight: '700', color: C.text },
+  addCancel: { color: C.accent, fontSize: Math.round(15 * C.textScale), fontWeight: '600' },
+  addLabel: { fontSize: Math.round(13 * C.textScale), fontWeight: '600', color: C.textSub, marginTop: 14, marginBottom: 6 },
   inputWrap: { borderRadius: 14 },
-  input: { paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: GLASS.text },
+  input: { paddingHorizontal: 14, paddingVertical: 13, fontSize: Math.round(15 * C.textScale), color: C.text },
   textArea: { height: 90, textAlignVertical: 'top' },
-  pinBtn: { backgroundColor: GLASS.accent, paddingVertical: 15, borderRadius: 14, alignItems: 'center', marginTop: 20, marginBottom: 4 },
+  pinBtn: { backgroundColor: C.accent, paddingVertical: 15, borderRadius: 14, alignItems: 'center', marginTop: 20, marginBottom: 4 },
   pinDisabled: { opacity: 0.6 },
-  pinText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  pinText: { color: '#fff', fontSize: Math.round(16 * C.textScale), fontWeight: '700' },
 });

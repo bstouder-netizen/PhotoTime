@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GlassPanel, GLASS } from '../components/Glass';
+import { GlassPanel, useColors, GlassColors } from '../components/Glass';
 
 export default function SearchScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
+  const C = useColors();
+  const styles = useMemo(() => makeStyles(C), [C]);
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <GlassPanel style={styles.header}>
@@ -42,46 +44,34 @@ export default function SearchScreen({ navigation }: any) {
         <TouchableOpacity
           activeOpacity={0.88}
           style={styles.cardSm}
-          onPress={() => navigation.navigate && navigation.navigate('ComingSoon', { title: 'Settings' })}
+          onPress={() => navigation.navigate && navigation.navigate('Settings')}
         >
           <Image source={require('../assets/PT_Settings_Icon.png')} style={styles.cardImageSm} resizeMode="cover" />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          activeOpacity={0.88}
-          style={styles.cardSm}
-          onPress={() => navigation.navigate && navigation.navigate('ComingSoon', { title: 'About' })}
-        >
-          <Image source={require('../assets/PT_About_Icon.png')} style={styles.cardImageSm} resizeMode="cover" />
-        </TouchableOpacity>
       </View>
+
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: GlassColors) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: 'transparent', paddingHorizontal: 16 },
   header: { borderRadius: 18, marginBottom: 16, paddingHorizontal: 16, paddingVertical: 14 },
-  heading: { fontSize: 22, fontWeight: '700', color: GLASS.text },
-  subheading: { fontSize: 13, color: GLASS.textMuted, marginTop: 2 },
+  heading: { fontSize: Math.round(22 * C.textScale), fontWeight: '700', color: C.text },
+  subheading: { fontSize: Math.round(13 * C.textScale), color: C.textMuted, marginTop: 2 },
 
   row: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-  wideCard: {
-    height: 180, borderRadius: 22, overflow: 'hidden',
-    borderWidth: 1, borderColor: GLASS.border,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15, shadowRadius: 16,
-  },
   card: {
     flex: 1, height: 200, borderRadius: 22, overflow: 'hidden',
-    borderWidth: 1, borderColor: GLASS.border,
+    borderWidth: 1, borderColor: C.border,
     shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15, shadowRadius: 16,
   },
   cardImage: { width: '100%', height: '100%', transform: [{ scale: 1.55 }] },
   cardSm: {
     flex: 1, height: 200, borderRadius: 22, overflow: 'hidden',
-    borderWidth: 1, borderColor: GLASS.border,
+    borderWidth: 1, borderColor: C.border,
     shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15, shadowRadius: 16,
   },

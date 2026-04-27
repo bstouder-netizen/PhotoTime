@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { GlassBg } from './components/Glass';
+import { useTheme } from './lib/themeContext';
 
 const AppTheme = {
   ...DefaultTheme,
@@ -23,12 +24,16 @@ import SearchScreen from './screens/SearchScreen';
 import PortfolioScreen from './screens/PortfolioScreen';
 import ComingSoonScreen from './screens/ComingSoonScreen';
 import SunsetCalculatorScreen from './screens/SunsetCalculatorScreen';
+import SettingsScreen from './screens/SettingsScreen';
+import OptionsScreen from './screens/OptionsScreen';
+import UpgradeToProScreen from './screens/UpgradeToProScreen';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
 const ShootsStack = createNativeStackNavigator();
+const SearchStack = createNativeStackNavigator();
 
 function HomeStackScreen() {
   return (
@@ -51,7 +56,18 @@ function ShootsStackScreen() {
   );
 }
 
-const ACTIVE_COLOR = '#1C1C1E';
+function SearchStackScreen() {
+  return (
+    <SearchStack.Navigator screenOptions={{ headerShown: false }}>
+      <SearchStack.Screen name="SearchMain" component={SearchScreen} />
+      <SearchStack.Screen name="Settings" component={SettingsScreen} />
+      <SearchStack.Screen name="Options" component={OptionsScreen} />
+      <SearchStack.Screen name="UpgradeToPro" component={UpgradeToProScreen} />
+      <SearchStack.Screen name="ComingSoon" component={ComingSoonScreen} />
+    </SearchStack.Navigator>
+  );
+}
+
 const INACTIVE_COLOR = '#FFFFFF';
 const ICON_SIZE = 26;
 const CIRCLE_SIZE = 44;
@@ -129,6 +145,8 @@ const styles = StyleSheet.create({
 });
 
 function PortfolioTabIcon({ focused }: { focused: boolean }) {
+  const { isGreyscale, accentColor } = useTheme();
+  const ACTIVE_COLOR = isGreyscale ? '#1C1C1E' : accentColor;
   const color = focused ? ACTIVE_COLOR : INACTIVE_COLOR;
   return (
     <View
@@ -148,6 +166,8 @@ function PortfolioTabIcon({ focused }: { focused: boolean }) {
 }
 
 function SearchTabIcon({ focused }: { focused: boolean }) {
+  const { isGreyscale, accentColor } = useTheme();
+  const ACTIVE_COLOR = isGreyscale ? '#1C1C1E' : accentColor;
   const color = focused ? ACTIVE_COLOR : INACTIVE_COLOR;
   return (
     <View
@@ -167,6 +187,8 @@ function SearchTabIcon({ focused }: { focused: boolean }) {
 }
 
 function ShootsTabIcon({ focused }: { focused: boolean }) {
+  const { isGreyscale, accentColor } = useTheme();
+  const ACTIVE_COLOR = isGreyscale ? '#1C1C1E' : accentColor;
   const color = focused ? ACTIVE_COLOR : INACTIVE_COLOR;
   return (
     <View
@@ -186,6 +208,8 @@ function ShootsTabIcon({ focused }: { focused: boolean }) {
 }
 
 function LocationTabIcon({ focused }: { focused: boolean }) {
+  const { isGreyscale, accentColor } = useTheme();
+  const ACTIVE_COLOR = isGreyscale ? '#1C1C1E' : accentColor;
   const color = focused ? ACTIVE_COLOR : INACTIVE_COLOR;
   return (
     <View
@@ -205,6 +229,8 @@ function LocationTabIcon({ focused }: { focused: boolean }) {
 }
 
 function HomeTabIcon({ focused }: { focused: boolean }) {
+  const { isGreyscale, accentColor } = useTheme();
+  const ACTIVE_COLOR = isGreyscale ? '#1C1C1E' : accentColor;
   return (
     <View
       style={{
@@ -269,14 +295,14 @@ export default function MainNavigator() {
                 return null;
             }
           },
-          tabBarActiveTintColor: ACTIVE_COLOR,
+          tabBarActiveTintColor: INACTIVE_COLOR,
           tabBarInactiveTintColor: INACTIVE_COLOR,
         })}
       >
         <Tab.Screen name="Home" component={HomeStackScreen} />
         <Tab.Screen name="Locations" component={LocationsScreen} />
         <Tab.Screen name="Shoots" component={ShootsStackScreen} />
-        <Tab.Screen name="Search" component={SearchScreen} />
+        <Tab.Screen name="Search" component={SearchStackScreen} />
         <Tab.Screen name="Portfolio" component={PortfolioScreen} />
         </Tab.Navigator>
       </NavigationContainer>

@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle, ImageBackground } from 'react-native';
 import { BlurView } from '@react-native-community/blur';
+import { useBackground } from '../lib/backgroundContext';
+import { useTheme } from '../lib/themeContext';
 
 export const GLASS = {
   bg: 'rgba(255,255,255,0.52)',
@@ -10,16 +12,42 @@ export const GLASS = {
   textSub: '#3A3A3C',
   textMuted: '#8E8E93',
   accent: '#3A3A3C',
+  accentSubtle: 'rgba(0,0,0,0.04)',
+  textScale: 1,
 };
 
+export type GlassColors = typeof GLASS;
+
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+export function useColors(): GlassColors {
+  const { isGreyscale, accentColor, isTextLarge } = useTheme();
+  const accent = isGreyscale ? GLASS.accent : accentColor;
+  const accentSubtle = isGreyscale ? GLASS.accentSubtle : hexToRgba(accentColor, 0.08);
+  const textScale = isTextLarge ? 1.2 : 1;
+  return { ...GLASS, accent, accentSubtle, textScale };
+}
+
+const DEFAULT_BG = require('../assets/PT_Background.png');
+
 export function GlassBg({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
+  const { backgroundUri } = useBackground();
+  const { isGreyscale, accentColor } = useTheme();
   return (
     <ImageBackground
-      source={require('../assets/PT_Background.png')}
+      source={backgroundUri ? { uri: backgroundUri } : DEFAULT_BG}
       style={[{ flex: 1 }, style]}
       imageStyle={{ resizeMode: 'cover' }}
     >
       <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(240,240,245,0.35)' }} />
+      {!isGreyscale && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: hexToRgba(accentColor, 0.10) }} />
+      )}
       {children}
     </ImageBackground>
   );
@@ -34,6 +62,7 @@ export function GlassPanel({
   style?: ViewStyle;
   blurAmount?: number;
 }) {
+  const { isGreyscale, accentColor } = useTheme();
   return (
     <View style={[styles.panel, style]}>
       <BlurView
@@ -43,6 +72,9 @@ export function GlassPanel({
         reducedTransparencyFallbackColor="rgba(235,235,235,0.85)"
       />
       <View style={[StyleSheet.absoluteFill, styles.tint]} />
+      {!isGreyscale && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: hexToRgba(accentColor, 0.06) }]} />
+      )}
       {children}
     </View>
   );

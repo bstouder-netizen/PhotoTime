@@ -9,6 +9,8 @@ import { useEffect } from 'react';
 import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import MainNavigator from './MainNavigator';
+import { BackgroundProvider } from './lib/backgroundContext';
+import { ThemeProvider } from './lib/themeContext';
 
 const BG = '#f2f2f2';
 
@@ -20,14 +22,18 @@ function App() {
     // registerPushToken();
   }, []);
   return (
-    <SafeAreaProvider>
-      {/* Fill entire screen including unsafe areas (home indicator zone) with grey */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: BG }]} />
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor={BG} />
-      <View style={styles.root}>
-        <MainNavigator />
-      </View>
-    </SafeAreaProvider>
+    <ThemeProvider>
+    <BackgroundProvider>
+      <SafeAreaProvider>
+        {/* Fill entire screen including unsafe areas (home indicator zone) with grey */}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: BG }]} />
+        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor={BG} />
+        <View style={styles.root}>
+          <MainNavigator />
+        </View>
+      </SafeAreaProvider>
+    </BackgroundProvider>
+    </ThemeProvider>
   );
 }
 

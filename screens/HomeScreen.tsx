@@ -1,28 +1,78 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Animated, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { GlassPanel, GLASS } from '../components/Glass';
+import { GlassPanel, useColors, GlassColors } from '../components/Glass';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
 
-const PLACEHOLDER_PHOTOGRAPHERS = [
-  { id: 1,  name: 'Alex M.',    avatar: 'https://i.pravatar.cc/100?img=11' },
-  { id: 2,  name: 'Jordan R.',  avatar: 'https://i.pravatar.cc/100?img=5'  },
-  { id: 3,  name: 'Sam K.',     avatar: 'https://i.pravatar.cc/100?img=32' },
-  { id: 4,  name: 'Casey L.',   avatar: 'https://i.pravatar.cc/100?img=47' },
-  { id: 5,  name: 'Morgan T.',  avatar: 'https://i.pravatar.cc/100?img=20' },
-  { id: 6,  name: 'Riley P.',   avatar: 'https://i.pravatar.cc/100?img=56' },
-  { id: 7,  name: 'Drew V.',    avatar: 'https://i.pravatar.cc/100?img=15' },
-  { id: 8,  name: 'Taylor W.',  avatar: 'https://i.pravatar.cc/100?img=39' },
-  { id: 9,  name: 'Quinn B.',   avatar: 'https://i.pravatar.cc/100?img=25' },
-  { id: 10, name: 'Avery N.',   avatar: 'https://i.pravatar.cc/100?img=44' },
-];
+// States reachable within ~4 hours driving from each state
+const STATE_NEIGHBORS: Record<string, string[]> = {
+  OR: ['OR','WA','CA','ID','NV'],
+  WA: ['WA','OR','ID','MT'],
+  CA: ['CA','OR','NV','AZ'],
+  ID: ['ID','OR','WA','MT','WY','UT','NV'],
+  NV: ['NV','CA','OR','ID','UT','AZ'],
+  MT: ['MT','ID','WA','WY','ND','SD'],
+  UT: ['UT','ID','NV','AZ','CO','WY'],
+  AZ: ['AZ','CA','NV','UT','NM'],
+  CO: ['CO','UT','WY','NE','KS','OK','NM'],
+  WY: ['WY','MT','ID','UT','CO','NE','SD'],
+  NM: ['NM','AZ','CO','OK','TX'],
+  TX: ['TX','NM','OK','AR','LA'],
+  OK: ['OK','TX','KS','MO','AR','CO','NM'],
+  KS: ['KS','OK','CO','NE','MO'],
+  NE: ['NE','KS','CO','WY','SD','IA','MO'],
+  SD: ['SD','NE','WY','MT','ND','MN','IA'],
+  ND: ['ND','SD','MT','MN'],
+  MN: ['MN','ND','SD','IA','WI'],
+  IA: ['IA','MN','SD','NE','MO','IL','WI'],
+  MO: ['MO','IA','NE','KS','OK','AR','TN','KY','IL'],
+  AR: ['AR','MO','OK','TX','LA','MS','TN'],
+  LA: ['LA','TX','AR','MS'],
+  MS: ['MS','LA','AR','TN','AL'],
+  AL: ['AL','MS','TN','GA','FL'],
+  FL: ['FL','AL','GA'],
+  GA: ['GA','FL','AL','TN','NC','SC'],
+  SC: ['SC','GA','NC'],
+  NC: ['NC','SC','GA','TN','VA'],
+  TN: ['TN','KY','VA','NC','GA','AL','MS','AR','MO'],
+  KY: ['KY','TN','VA','WV','OH','IN','IL','MO'],
+  VA: ['VA','NC','TN','KY','WV','MD'],
+  WV: ['WV','VA','KY','OH','PA','MD'],
+  MD: ['MD','VA','WV','PA','DE'],
+  PA: ['PA','WV','MD','DE','NJ','NY','OH'],
+  OH: ['OH','PA','WV','KY','IN','MI'],
+  MI: ['MI','OH','IN','WI'],
+  IN: ['IN','OH','KY','IL','MI'],
+  IL: ['IL','IN','KY','MO','IA','WI'],
+  WI: ['WI','IL','IA','MN','MI'],
+  NY: ['NY','PA','NJ','CT','MA','VT'],
+  NJ: ['NJ','NY','PA','DE'],
+  CT: ['CT','NY','MA','RI'],
+  RI: ['RI','CT','MA'],
+  MA: ['MA','CT','RI','NY','VT','NH'],
+  VT: ['VT','NY','MA','NH'],
+  NH: ['NH','VT','MA','ME'],
+  ME: ['ME','NH'],
+  DE: ['DE','MD','PA','NJ'],
+  AK: ['AK'],
+  HI: ['HI'],
+};
+
+type NearbyPhotographer = {
+  id: string;
+  device_id: string;
+  username: string;
+  person_name?: string;
+  profile_pic?: string;
+};
 
 type ProfileData = {
   username: string;
   business_name: string;
   profile_pic: string;
+  location?: string;
   portfolio_1?: string;
   portfolio_2?: string;
   portfolio_3?: string;
@@ -33,9 +83,12 @@ type ProfileData = {
 export default function HomeScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
+  const C = useColors();
+  const styles = useMemo(() => makeStyles(C), [C]);
   // Height remaining after all fixed content above the bottom cards
   const cardRowHeight = Math.max(120, windowHeight - insets.top - insets.bottom - 90 - 518);
   const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [nearbyPhotographers, setNearbyPhotographers] = useState<NearbyPhotographer[]>([]);
   const [slideIndex, setSlideIndex] = useState(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -47,10 +100,54 @@ export default function HomeScreen({ navigation }: any) {
         const deviceId = await getDeviceId();
         const { data } = await supabase
           .from('profiles')
-          .select('username, business_name, profile_pic, portfolio_1, portfolio_2, portfolio_3, portfolio_4, portfolio_5')
+          .select('username, business_name, profile_pic, location, portfolio_1, portfolio_2, portfolio_3, portfolio_4, portfolio_5')
           .eq('device_id', deviceId)
           .single();
         if (active && data) setProfile(data);
+
+        // DEBUG: verify basic query works at all
+        const { data: allProfiles, error: allErr } = await supabase
+          .from('profiles')
+          .select('id, username, location')
+          .neq('device_id', deviceId)
+          .limit(30);
+        console.log('[NearYou] all profiles query error:', allErr);
+        console.log('[NearYou] all profiles returned:', allProfiles?.length, allProfiles?.map(p => p.location));
+
+        // Extract state from user location
+        const rawLocation = data?.location ?? '';
+        const parts = rawLocation.trim().split(/,\s*/);
+        const userState = parts[parts.length - 1]?.trim().slice(0, 2).toUpperCase() ?? '';
+        const states = STATE_NEIGHBORS[userState] ?? (userState ? [userState] : []);
+        console.log('[NearYou] userLocation:', rawLocation, '→ state:', userState, '→ searching states:', states);
+
+        if (active) {
+          let merged: any[] = [];
+          if (states.length > 0) {
+            const results = await Promise.all(
+              states.map(s =>
+                supabase
+                  .from('profiles')
+                  .select('id, device_id, username, person_name, profile_pic')
+                  .ilike('location', `%, ${s}%`)
+                  .neq('device_id', deviceId)
+                  .limit(20)
+              )
+            );
+            results.forEach((r, i) => {
+              console.log(`[NearYou] state ${states[i]}: ${r.data?.length ?? 0} results, error:`, r.error);
+            });
+            const seen = new Set<string>();
+            merged = results
+              .flatMap(r => r.data ?? [])
+              .filter(p => { if (seen.has(p.id)) return false; seen.add(p.id); return true; });
+          } else {
+            // No state detected — show everyone
+            merged = allProfiles ?? [];
+          }
+          console.log('[NearYou] final merged count:', merged.length);
+          setNearbyPhotographers(merged);
+        }
       })();
       return () => { active = false; };
     }, [])
@@ -104,16 +201,24 @@ export default function HomeScreen({ navigation }: any) {
         {/* Placeholder photographer row */}
         <GlassPanel style={styles.nearYouCard}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.nearYouRow}>
-            {PLACEHOLDER_PHOTOGRAPHERS.map(p => (
-              <View key={p.id} style={styles.nearYouItem}>
+            {nearbyPhotographers.length > 0 ? nearbyPhotographers.map(p => (
+              <TouchableOpacity
+                key={p.id}
+                style={styles.nearYouItem}
+                activeOpacity={0.75}
+                onPress={() => navigation.navigate('Profile', { viewDeviceId: p.device_id })}
+              >
                 <View style={styles.nearYouCircle}>
-                  <Image source={{ uri: p.avatar }} style={styles.nearYouAvatar} />
+                  {p.profile_pic
+                    ? <Image source={{ uri: p.profile_pic }} style={styles.nearYouAvatar} />
+                    : <Text style={styles.nearYouInitial}>📷</Text>}
                 </View>
-                <Text style={styles.nearYouName} numberOfLines={1}>{p.name}</Text>
-              </View>
-            ))}
+                <Text style={styles.nearYouName} numberOfLines={1}>@{p.username}</Text>
+              </TouchableOpacity>
+            )) : (
+              <Text style={styles.nearYouEmpty}>No photographers found nearby yet</Text>
+            )}
           </ScrollView>
-          <Text style={styles.nearYouComingSoon}>More photographers coming soon</Text>
         </GlassPanel>
 
         {/* Featured card */}
@@ -164,7 +269,7 @@ export default function HomeScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: GlassColors) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: 'transparent' },
   scroll: { flex: 1 },
   container: { flexGrow: 1, paddingBottom: 100, paddingHorizontal: 14 },
@@ -174,26 +279,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 10,
   },
-  userName: { fontSize: 16, fontWeight: '700', color: GLASS.text },
-  businessName: { fontSize: 12, color: GLASS.textSub, marginTop: 2 },
+  userName: { fontSize: Math.round(16 * C.textScale), fontWeight: '700', color: C.text },
+  businessName: { fontSize: Math.round(12 * C.textScale), color: C.textSub, marginTop: 2 },
   picCircle: {
     width: 40, height: 40, borderRadius: 20,
-    borderWidth: 1.5, borderColor: GLASS.border,
+    borderWidth: 1.5, borderColor: C.border,
     alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
   },
   picImage: { width: 40, height: 40, borderRadius: 20 },
-  picLabel: { fontSize: 11, color: GLASS.textSub, fontWeight: '500' },
+  picLabel: { fontSize: Math.round(11 * C.textScale), color: C.textSub, fontWeight: '500' },
 
   sectionLabel: {
-    fontSize: 11, fontWeight: '700', letterSpacing: 1.5,
-    color: GLASS.textMuted, textAlign: 'center',
+    fontSize: Math.round(11 * C.textScale), fontWeight: '700', letterSpacing: 1.5,
+    color: C.accent, textAlign: 'center',
     marginBottom: 6,
   },
 
   featuredCard: {
     borderRadius: 20, overflow: 'hidden', height: 300,
     backgroundColor: '#1e1b4b', marginBottom: 8,
-    borderWidth: 1, borderColor: GLASS.border,
+    borderWidth: 1, borderColor: C.border,
     shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.35, shadowRadius: 20,
   },
@@ -206,31 +311,33 @@ const styles = StyleSheet.create({
     position: 'absolute', bottom: 0, left: 0, right: 0,
     paddingHorizontal: 18, paddingBottom: 18, paddingTop: 40,
   },
-  featuredLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.5, color: 'rgba(255,255,255,0.7)', marginBottom: 4 },
-  featuredName: { fontSize: 24, fontWeight: '800', color: '#fff', marginBottom: 2 },
-  featuredBusiness: { fontSize: 14, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
+  featuredLabel: { fontSize: Math.round(11 * C.textScale), fontWeight: '700', letterSpacing: 1.5, color: 'rgba(255,255,255,0.7)', marginBottom: 4 },
+  featuredName: { fontSize: Math.round(24 * C.textScale), fontWeight: '800', color: '#fff', marginBottom: 2 },
+  featuredBusiness: { fontSize: Math.round(14 * C.textScale), color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
   dots: { flexDirection: 'row', marginTop: 10, gap: 6 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.4)' },
   dotActive: { backgroundColor: '#fff' },
 
   row: { flexDirection: 'row', gap: 12, marginBottom: 0, height: 160 },
   halfCardWrap: { flex: 1 },
-  sunsetBtn: { flex: 1, borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: GLASS.border },
+  sunsetBtn: { flex: 1, borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: C.border },
   sunsetBtnImage: { width: '100%', height: 160 },
   cardOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.35)', paddingVertical: 10, alignItems: 'center' },
-  cardOverlayText: { color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  cardOverlayText: { color: '#fff', fontSize: Math.round(11 * C.textScale), fontWeight: '700', letterSpacing: 1 },
   halfCard: { alignItems: 'center', paddingVertical: 20, paddingHorizontal: 8, borderRadius: 18 },
   halfImage: { width: 100, height: 100 },
   halfLabel: {
-    marginTop: 10, fontSize: 11, fontWeight: '700',
-    letterSpacing: 0.8, color: GLASS.text, textAlign: 'center',
+    marginTop: 10, fontSize: Math.round(11 * C.textScale), fontWeight: '700',
+    letterSpacing: 0.8, color: C.text, textAlign: 'center',
   },
 
   nearYouCard: { borderRadius: 18, marginBottom: 8, paddingTop: 10, paddingBottom: 6 },
   nearYouRow: { paddingHorizontal: 14, gap: 16 },
   nearYouItem: { alignItems: 'center', width: 64 },
-  nearYouCircle: { width: 58, height: 58, borderRadius: 29, overflow: 'hidden', borderWidth: 2, borderColor: GLASS.border, marginBottom: 5 },
+  nearYouCircle: { width: 58, height: 58, borderRadius: 29, overflow: 'hidden', borderWidth: 2, borderColor: C.border, marginBottom: 5 },
   nearYouAvatar: { width: '100%', height: '100%' },
-  nearYouName: { fontSize: 11, color: GLASS.textSub, fontWeight: '500', textAlign: 'center' },
-  nearYouComingSoon: { fontSize: 11, color: GLASS.textMuted, textAlign: 'center', paddingBottom: 8, marginTop: 2 },
+  nearYouName: { fontSize: Math.round(11 * C.textScale), color: C.textSub, fontWeight: '500', textAlign: 'center' },
+  nearYouComingSoon: { fontSize: Math.round(11 * C.textScale), color: C.textMuted, textAlign: 'center', paddingBottom: 8, marginTop: 2 },
+  nearYouInitial: { fontSize: Math.round(24 * C.textScale) },
+  nearYouEmpty: { fontSize: Math.round(13 * C.textScale), color: C.textMuted, paddingHorizontal: 16, paddingVertical: 12 },
 });

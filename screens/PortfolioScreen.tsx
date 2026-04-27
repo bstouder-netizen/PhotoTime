@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Image, ActivityIndicator, Alert, Switch, FlatList, RefreshControl, Modal, Share,
@@ -7,7 +7,7 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
-import { GlassPanel, GLASS } from '../components/Glass';
+import { GlassPanel, useColors, GlassColors } from '../components/Glass';
 
 type PublicPortfolio = {
   device_id: string;
@@ -22,6 +22,8 @@ type PublicPortfolio = {
 };
 
 export default function PortfolioScreen() {
+  const C = useColors();
+  const styles = useMemo(() => makeStyles(C), [C]);
   const insets = useSafeAreaInsets();
   const [deviceId, setDeviceId] = useState('');
   const [myPics, setMyPics] = useState<(string | null)[]>([null, null, null, null, null]);
@@ -133,7 +135,7 @@ export default function PortfolioScreen() {
         <GlassPanel style={styles.header}>
           <Text style={styles.heading}>Portfolio</Text>
         </GlassPanel>
-        <View style={styles.center}><ActivityIndicator size="large" color={GLASS.accent} /></View>
+        <View style={styles.center}><ActivityIndicator size="large" color={C.accent} /></View>
       </View>
     );
   }
@@ -167,7 +169,7 @@ export default function PortfolioScreen() {
           data={feed}
           keyExtractor={item => item.device_id}
           contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={GLASS.accent} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
           ListEmptyComponent={
             <GlassPanel style={styles.emptyCard}>
               <Text style={styles.emptyIcon}>📷</Text>
@@ -210,11 +212,11 @@ export default function PortfolioScreen() {
               </Text>
             </View>
             {togglingPublic
-              ? <ActivityIndicator color={GLASS.accent} />
+              ? <ActivityIndicator color={C.accent} />
               : <Switch
                   value={isPublic}
                   onValueChange={togglePublic}
-                  trackColor={{ false: 'rgba(255,255,255,0.2)', true: GLASS.accent }}
+                  trackColor={{ false: 'rgba(255,255,255,0.2)', true: C.accent }}
                   thumbColor="#fff"
                 />}
           </GlassPanel>
@@ -231,7 +233,7 @@ export default function PortfolioScreen() {
               >
                 <GlassPanel style={styles.panel}>
                   {uploading[i] ? (
-                    <ActivityIndicator color={GLASS.accent} />
+                    <ActivityIndicator color={C.accent} />
                   ) : uri ? (
                     <Image source={{ uri }} style={styles.photo} resizeMode="cover" />
                   ) : (
@@ -290,56 +292,56 @@ export default function PortfolioScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: GlassColors) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: 'transparent', paddingHorizontal: 14 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   header: { borderRadius: 18, marginBottom: 12, paddingHorizontal: 16, paddingVertical: 14 },
-  heading: { fontSize: 22, fontWeight: '700', color: GLASS.text },
-  subheading: { fontSize: 13, color: GLASS.textMuted, marginTop: 2 },
+  heading: { fontSize: Math.round(22 * C.textScale), fontWeight: '700', color: C.text },
+  subheading: { fontSize: Math.round(13 * C.textScale), color: C.textMuted, marginTop: 2 },
 
   tabBar: { flexDirection: 'row', borderRadius: 14, marginBottom: 12, overflow: 'hidden' },
   tabItem: { flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabItemActive: { borderBottomColor: GLASS.accent },
-  tabLabel: { fontSize: 15, fontWeight: '600', color: GLASS.textSub },
-  tabLabelActive: { color: GLASS.text },
+  tabItemActive: { borderBottomColor: C.accent },
+  tabLabel: { fontSize: Math.round(15 * C.textScale), fontWeight: '600', color: C.textSub },
+  tabLabelActive: { color: C.text },
 
   portfolioCard: { borderRadius: 18, marginBottom: 14, overflow: 'hidden', paddingTop: 14 },
   userRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, marginBottom: 10 },
   userAvatar: { width: 40, height: 40, borderRadius: 20 },
   userAvatarPlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
-  userAvatarText: { fontSize: 18 },
-  userUsername: { fontSize: 14, fontWeight: '700', color: GLASS.text },
-  userName: { fontSize: 12, color: GLASS.textMuted },
+  userAvatarText: { fontSize: Math.round(18 * C.textScale) },
+  userUsername: { fontSize: Math.round(14 * C.textScale), fontWeight: '700', color: C.text },
+  userName: { fontSize: Math.round(12 * C.textScale), color: C.textMuted },
   photoRow: { paddingHorizontal: 14, paddingBottom: 14 },
   feedPhoto: { width: 160, height: 160, borderRadius: 12, marginRight: 10 },
 
   emptyCard: { borderRadius: 20, alignItems: 'center', padding: 40, marginTop: 20 },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyText: { fontSize: 17, fontWeight: '700', color: GLASS.text, marginBottom: 6 },
-  emptySub: { fontSize: 14, color: GLASS.textMuted, textAlign: 'center' },
+  emptyIcon: { fontSize: Math.round(48 * C.textScale), marginBottom: 12 },
+  emptyText: { fontSize: Math.round(17 * C.textScale), fontWeight: '700', color: C.text, marginBottom: 6 },
+  emptySub: { fontSize: Math.round(14 * C.textScale), color: C.textMuted, textAlign: 'center' },
 
   shareToggleCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 14 },
   shareToggleText: { flex: 1, marginRight: 12 },
-  shareToggleTitle: { fontSize: 15, fontWeight: '700', color: GLASS.text },
-  shareToggleSub: { fontSize: 12, color: GLASS.textMuted, marginTop: 2 },
+  shareToggleTitle: { fontSize: Math.round(15 * C.textScale), fontWeight: '700', color: C.text },
+  shareToggleSub: { fontSize: Math.round(12 * C.textScale), color: C.textMuted, marginTop: 2 },
 
-  hint: { fontSize: 13, color: GLASS.textMuted, textAlign: 'center', marginBottom: 12 },
+  hint: { fontSize: Math.round(13 * C.textScale), color: C.textMuted, textAlign: 'center', marginBottom: 12 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  slot: { width: '47%', aspectRatio: 1, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: GLASS.border },
+  slot: { width: '47%', aspectRatio: 1, borderRadius: 16, overflow: 'hidden', borderWidth: 1.5, borderColor: C.accentSubtle },
   panel: { flex: 1, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   photo: { width: '100%', height: '100%' },
-  addIcon: { fontSize: 36, color: GLASS.textMuted, lineHeight: 40 },
-  addLabel: { fontSize: 12, color: GLASS.textMuted, marginTop: 4 },
+  addIcon: { fontSize: Math.round(36 * C.textScale), color: C.textMuted, lineHeight: 40 },
+  addLabel: { fontSize: Math.round(12 * C.textScale), color: C.textMuted, marginTop: 4 },
 
   fsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' },
   fsTopBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingBottom: 10, backgroundColor: 'rgba(0,0,0,0.6)' },
   fsNavBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 22 },
   fsNavBtnDisabled: { opacity: 0.25 },
-  fsNavText: { color: '#fff', fontSize: 30, fontWeight: '300', lineHeight: 36 },
-  fsCounterText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  fsNavText: { color: '#fff', fontSize: Math.round(30 * C.textScale), fontWeight: '300', lineHeight: 36 },
+  fsCounterText: { color: '#fff', fontSize: Math.round(15 * C.textScale), fontWeight: '600' },
   fsClose: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 22 },
-  fsCloseText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  fsShareText: { color: '#fff', fontSize: 18 },
+  fsCloseText: { color: '#fff', fontSize: Math.round(16 * C.textScale), fontWeight: '700' },
+  fsShareText: { color: '#fff', fontSize: Math.round(18 * C.textScale) },
   fsImage: { flex: 1, width: '100%' },
 });
