@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, Alert, Image, Linking, Switch, Modal,
+  ScrollView, FlatList, ActivityIndicator, Alert, Image, Linking, Switch, Modal,
 } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
 import { GlassPanel, useColors, GlassColors } from '../components/Glass';
+import { PHOTO_SPECIALTIES } from '../lib/specialties';
 
 const DEFAULT_LOCATION_PHOTO = 'https://picsum.photos/seed/photolocation/600/400';
 
@@ -39,6 +40,7 @@ type Profile = {
   email?: string;
   email_public?: boolean;
   website?: string;
+  specialty?: string;
   portfolio_1?: string;
   portfolio_2?: string;
   portfolio_3?: string;
@@ -48,7 +50,7 @@ type Profile = {
 
 const EMPTY = {
   username: '', person_name: '', business_name: '', profile_pic: '',
-  location: '', zip_code: '', email: '', email_public: false, website: '',
+  location: '', zip_code: '', email: '', email_public: false, website: '', specialty: '',
 };
 
 export default function ProfileScreen({ navigation, route }: any) {
@@ -69,6 +71,7 @@ export default function ProfileScreen({ navigation, route }: any) {
   const [portfolioUploading, setPortfolioUploading] = useState<boolean[]>([false, false, false, false, false]);
   const [endorsements, setEndorsements] = useState<Endorsement[]>([]);
   const [endorseModalVisible, setEndorseModalVisible] = useState(false);
+  const [specialtyPickerVisible, setSpecialtyPickerVisible] = useState(false);
   const [endorseText, setEndorseText] = useState('');
   const [endorseSubmitting, setEndorseSubmitting] = useState(false);
   const [currentDeviceId, setCurrentDeviceId] = useState('');
@@ -203,7 +206,7 @@ export default function ProfileScreen({ navigation, route }: any) {
         business_name: data.business_name ?? '', profile_pic: data.profile_pic ?? '',
         location: data.location ?? '', zip_code: data.zip_code ?? '',
         email: data.email ?? '', email_public: data.email_public ?? false,
-        website: data.website ?? '',
+        website: data.website ?? '', specialty: data.specialty ?? '',
       });
       setPortfolioPics([
         data.portfolio_1 || null, data.portfolio_2 || null, data.portfolio_3 || null,
@@ -375,6 +378,45 @@ export default function ProfileScreen({ navigation, route }: any) {
           />
         </GlassPanel>
 
+        <Text style={styles.label}>Specialty</Text>
+        <TouchableOpacity onPress={() => setSpecialtyPickerVisible(true)}>
+          <GlassPanel style={styles.pickerRow}>
+            <Text style={form.specialty ? styles.pickerValue : styles.pickerPlaceholder}>
+              {form.specialty || 'Select a specialty…'}
+            </Text>
+            <Text style={styles.pickerChevron}>▾</Text>
+          </GlassPanel>
+        </TouchableOpacity>
+
+        <Modal visible={specialtyPickerVisible} transparent animationType="slide">
+          <TouchableOpacity style={styles.modalOverlay} onPress={() => setSpecialtyPickerVisible(false)} />
+          <GlassPanel style={styles.pickerSheet}>
+            <View style={{ paddingBottom: insets.bottom + 8 }}>
+              <View style={styles.pickerSheetHeader}>
+                <Text style={styles.pickerSheetTitle}>Select Specialty</Text>
+                <TouchableOpacity onPress={() => setSpecialtyPickerVisible(false)}>
+                  <Text style={styles.pickerSheetDone}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <FlatList
+                data={['', ...PHOTO_SPECIALTIES]}
+                keyExtractor={item => item || '__none'}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.pickerItem}
+                    onPress={() => { setForm(f => ({ ...f, specialty: item })); setSpecialtyPickerVisible(false); }}
+                  >
+                    <Text style={[styles.pickerItemText, form.specialty === item && styles.pickerItemSelected]}>
+                      {item || 'None'}
+                    </Text>
+                    {form.specialty === item && <Text style={styles.pickerCheck}>✓</Text>}
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </GlassPanel>
+        </Modal>
+
         <TouchableOpacity style={[styles.button, styles.saveBtn, saving && styles.buttonDisabled]} onPress={handleSave} disabled={saving}>
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save Profile</Text>}
         </TouchableOpacity>
@@ -478,6 +520,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           {profile?.business_name ? <InfoRow label="Business" value={profile.business_name} /> : null}
           {profile?.location ? <InfoRow label="Location" value={profile.location} /> : null}
           {profile?.zip_code ? <InfoRow label="Zip Code" value={profile.zip_code} /> : null}
+          {profile?.specialty ? <InfoRow label="Specialty" value={profile.specialty} /> : null}
 
           {((profile?.email && profile?.email_public) || profile?.website) &&
             <Text style={styles.contactSectionLabel}>CONTACT</Text>}
@@ -695,7 +738,7 @@ const makeStyles = (C: GlassColors) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: 'transparent', paddingHorizontal: 14 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
 
-  header: { borderRadius: 18, marginBottom: 12, paddingHorizontal: 16, paddingVertical: 14 },
+  header: { borderRadius: 18, marginBottom: 8, paddingHorizontal: 16, paddingVertical: 8 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   back: { color: C.accent, fontSize: Math.round(15 * C.textScale), marginBottom: 4 },
   heading: { fontSize: Math.round(22 * C.textScale), fontWeight: '700', color: C.text },
@@ -819,4 +862,18 @@ const makeStyles = (C: GlassColors) => StyleSheet.create({
   toggleTextBlock: { flex: 1, marginRight: 12 },
   toggleTitle: { fontSize: Math.round(15 * C.textScale), color: C.text, fontWeight: '500' },
   toggleSub: { fontSize: Math.round(12 * C.textScale), color: C.textMuted, marginTop: 2 },
+
+  pickerRow: { borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 14 },
+  pickerValue: { fontSize: Math.round(15 * C.textScale), color: C.text, flex: 1 },
+  pickerPlaceholder: { fontSize: Math.round(15 * C.textScale), color: C.textMuted, flex: 1 },
+  pickerChevron: { fontSize: Math.round(16 * C.textScale), color: C.textSub },
+  modalOverlay: { flex: 1 },
+  pickerSheet: { borderRadius: 24, marginHorizontal: 12, marginBottom: 12, maxHeight: '55%' },
+  pickerSheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: C.border },
+  pickerSheetTitle: { fontSize: Math.round(17 * C.textScale), fontWeight: '600', color: C.text },
+  pickerSheetDone: { color: C.accent, fontSize: Math.round(16 * C.textScale), fontWeight: '600' },
+  pickerItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.border },
+  pickerItemText: { fontSize: Math.round(16 * C.textScale), color: C.textSub },
+  pickerItemSelected: { color: C.text, fontWeight: '600' },
+  pickerCheck: { color: C.accent, fontSize: Math.round(16 * C.textScale), fontWeight: '700' },
 });

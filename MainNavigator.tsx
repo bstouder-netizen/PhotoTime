@@ -25,7 +25,13 @@ import PortfolioScreen from './screens/PortfolioScreen';
 import ComingSoonScreen from './screens/ComingSoonScreen';
 import SunsetCalculatorScreen from './screens/SunsetCalculatorScreen';
 import SettingsScreen from './screens/SettingsScreen';
-import OptionsScreen from './screens/OptionsScreen';
+import AboutScreen from './screens/AboutScreen';
+import MerchScreen from './screens/MerchScreen';
+import StoreScreen from './screens/StoreScreen';
+import PhotographerSearchScreen from './screens/PhotographerSearchScreen';
+import ColorScaleScreen from './screens/ColorScaleScreen';
+import TextSizeScreen from './screens/TextSizeScreen';
+import BackgroundImageScreen from './screens/BackgroundImageScreen';
 import UpgradeToProScreen from './screens/UpgradeToProScreen';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -61,7 +67,13 @@ function SearchStackScreen() {
     <SearchStack.Navigator screenOptions={{ headerShown: false }}>
       <SearchStack.Screen name="SearchMain" component={SearchScreen} />
       <SearchStack.Screen name="Settings" component={SettingsScreen} />
-      <SearchStack.Screen name="Options" component={OptionsScreen} />
+      <SearchStack.Screen name="About" component={AboutScreen} />
+      <SearchStack.Screen name="Merch" component={MerchScreen} />
+      <SearchStack.Screen name="Store" component={StoreScreen} />
+      <SearchStack.Screen name="PhotographerSearch" component={PhotographerSearchScreen} />
+      <SearchStack.Screen name="ColorScale" component={ColorScaleScreen} />
+      <SearchStack.Screen name="TextSize" component={TextSizeScreen} />
+      <SearchStack.Screen name="BackgroundImage" component={BackgroundImageScreen} />
       <SearchStack.Screen name="UpgradeToPro" component={UpgradeToProScreen} />
       <SearchStack.Screen name="ComingSoon" component={ComingSoonScreen} />
     </SearchStack.Navigator>

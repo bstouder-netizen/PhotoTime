@@ -1,16 +1,17 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
 import { useEffect } from 'react';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
+import { Alert, LogBox, StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
+
+LogBox.ignoreLogs([
+  'Push token registration failed',
+  'Push foreground listener failed',
+  'No Firebase App',
+  'firebase',
+]);
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import MainNavigator from './MainNavigator';
 import { BackgroundProvider } from './lib/backgroundContext';
 import { ThemeProvider } from './lib/themeContext';
+import { registerPushToken, onForegroundMessage } from './lib/notifications';
 
 const BG = '#f2f2f2';
 
@@ -18,8 +19,11 @@ function App() {
   const isDarkMode = useColorScheme() === 'dark';
 
   useEffect(() => {
-    // Firebase not configured until GoogleService-Info.plist is added
-    // registerPushToken();
+    registerPushToken();
+    const unsubscribe = onForegroundMessage((title, body) => {
+      Alert.alert(title, body);
+    });
+    return unsubscribe;
   }, []);
   return (
     <ThemeProvider>

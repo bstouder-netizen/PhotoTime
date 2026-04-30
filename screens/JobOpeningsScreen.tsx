@@ -473,7 +473,7 @@ export default function JobOpeningsScreen({ navigation }: any) {
 const makeStyles = (C: GlassColors) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: 'transparent', paddingHorizontal: 14 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { borderRadius: 18, marginBottom: 12, paddingHorizontal: 16, paddingVertical: 14 },
+  header: { borderRadius: 18, marginBottom: 8, paddingHorizontal: 16, paddingVertical: 8 },
   back: { color: C.accent, fontSize: Math.round(15 * C.textScale), marginBottom: 4 },
   heading: { fontSize: Math.round(22 * C.textScale), fontWeight: '700', color: C.text },
   list: { paddingBottom: 32, gap: 10 },

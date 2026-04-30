@@ -2,11 +2,13 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const KEY_GREYSCALE = '@theme_greyscale';
-const KEY_ACCENT = '@theme_accent';
-const KEY_TEXT_LARGE = '@theme_text_large';
+const KEY_ACCENT    = '@theme_accent';
+const KEY_TEXT_SIZE = '@theme_text_size';
 
-export const GREYSCALE_ACCENT = '#3A3A3C';
+export const GREYSCALE_ACCENT    = '#3A3A3C';
 export const DEFAULT_COLOR_ACCENT = '#2563EB';
+
+export type TextSize = 'small' | 'default' | 'large';
 
 export const COLOR_PALETTE = [
   { label: 'Ocean',  color: '#2563EB' },
@@ -22,36 +24,41 @@ export const COLOR_PALETTE = [
 type ThemeContextType = {
   isGreyscale: boolean;
   accentColor: string;
-  isTextLarge: boolean;
+  textSize: TextSize;
   setGreyscale: (v: boolean) => Promise<void>;
   setAccentColor: (color: string) => Promise<void>;
-  setTextLarge: (v: boolean) => Promise<void>;
+  setTextSize: (v: TextSize) => Promise<void>;
 };
 
 const ThemeContext = createContext<ThemeContextType>({
   isGreyscale: true,
   accentColor: GREYSCALE_ACCENT,
-  isTextLarge: false,
+  textSize: 'default',
   setGreyscale: async () => {},
   setAccentColor: async () => {},
-  setTextLarge: async () => {},
+  setTextSize: async () => {},
 });
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [isGreyscale, setIsGreyscale] = useState(true);
   const [accentColor, setAccent] = useState(GREYSCALE_ACCENT);
-  const [isTextLarge, setIsTextLarge] = useState(false);
+  const [textSize, setTextSizeState] = useState<TextSize>('default');
 
   useEffect(() => {
     Promise.all([
       AsyncStorage.getItem(KEY_GREYSCALE),
       AsyncStorage.getItem(KEY_ACCENT),
-      AsyncStorage.getItem(KEY_TEXT_LARGE),
-    ]).then(([gs, ac, tl]) => {
+      AsyncStorage.getItem(KEY_TEXT_SIZE),
+      AsyncStorage.getItem('@theme_text_large'), // migrate old key
+    ]).then(([gs, ac, ts, oldLarge]) => {
       const grey = gs !== 'false';
       setIsGreyscale(grey);
       setAccent(grey ? GREYSCALE_ACCENT : (ac ?? DEFAULT_COLOR_ACCENT));
-      setIsTextLarge(tl === 'true');
+      if (ts === 'small' || ts === 'default' || ts === 'large') {
+        setTextSizeState(ts);
+      } else if (oldLarge === 'true') {
+        setTextSizeState('large');
+      }
     });
   }, []);
 
@@ -71,13 +78,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem(KEY_ACCENT, color);
   };
 
-  const setTextLarge = async (v: boolean) => {
-    setIsTextLarge(v);
-    await AsyncStorage.setItem(KEY_TEXT_LARGE, String(v));
+  const setTextSize = async (v: TextSize) => {
+    setTextSizeState(v);
+    await AsyncStorage.setItem(KEY_TEXT_SIZE, v);
   };
 
   return (
-    <ThemeContext.Provider value={{ isGreyscale, accentColor, isTextLarge, setGreyscale, setAccentColor, setTextLarge }}>
+    <ThemeContext.Provider value={{ isGreyscale, accentColor, textSize, setGreyscale, setAccentColor, setTextSize }}>
       {children}
     </ThemeContext.Provider>
   );

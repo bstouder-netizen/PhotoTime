@@ -95,7 +95,7 @@ export default function UpgradeToProScreen({ navigation }: any) {
 
 const makeStyles = (C: GlassColors) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: 'transparent', paddingHorizontal: 16 },
-  header: { borderRadius: 18, marginBottom: 14, paddingHorizontal: 16, paddingVertical: 14 },
+  header: { borderRadius: 18, marginBottom: 10, paddingHorizontal: 16, paddingVertical: 8 },
   back: { color: C.accent, fontSize: Math.round(15 * C.textScale), marginBottom: 4 },
   heading: { fontSize: Math.round(22 * C.textScale), fontWeight: '700', color: C.text },
 

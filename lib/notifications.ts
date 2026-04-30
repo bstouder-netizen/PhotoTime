@@ -28,10 +28,15 @@ export async function registerPushToken(): Promise<void> {
 
 export function onForegroundMessage(
   handler: (title: string, body: string) => void
-) {
-  return messaging().onMessage(async msg => {
-    const title = msg.notification?.title ?? '';
-    const body = msg.notification?.body ?? '';
-    handler(title, body);
-  });
+): () => void {
+  try {
+    return messaging().onMessage(async msg => {
+      const title = msg.notification?.title ?? '';
+      const body = msg.notification?.body ?? '';
+      handler(title, body);
+    });
+  } catch (e) {
+    console.warn('Push foreground listener failed:', e);
+    return () => {};
+  }
 }

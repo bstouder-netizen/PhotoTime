@@ -1,12 +1,21 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassPanel, useColors, GlassColors } from '../components/Glass';
+import { supabase } from '../lib/supabase';
 
 export default function ShootsScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const C = useColors();
   const styles = useMemo(() => makeStyles(C), [C]);
+  const [jobCount, setJobCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    supabase
+      .from('job_postings')
+      .select('*', { count: 'exact', head: true })
+      .then(({ count }) => setJobCount(count ?? 0));
+  }, []);
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <GlassPanel style={styles.header}>
@@ -24,7 +33,9 @@ export default function ShootsScreen({ navigation }: any) {
           <GlassPanel style={styles.actionCard}>
             <Text style={styles.actionIcon}>🔍</Text>
             <Text style={styles.actionTitle}>Job Openings</Text>
-            <Text style={styles.actionSub}>Browse available shoots</Text>
+            <Text style={styles.actionSub}>
+              {jobCount === null ? 'Browse available shoots' : `${jobCount} job${jobCount === 1 ? '' : 's'} available`}
+            </Text>
           </GlassPanel>
         </TouchableOpacity>
       </View>
@@ -34,7 +45,7 @@ export default function ShootsScreen({ navigation }: any) {
 
 const makeStyles = (C: GlassColors) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: 'transparent', paddingHorizontal: 16 },
-  header: { borderRadius: 18, marginBottom: 16, paddingHorizontal: 16, paddingVertical: 14 },
+  header: { borderRadius: 18, marginBottom: 10, paddingHorizontal: 16, paddingVertical: 8 },
   heading: { fontSize: Math.round(22 * C.textScale), fontWeight: '700', color: C.text },
   body: { flex: 1, justifyContent: 'center', gap: 14 },
   actionCard: { borderRadius: 22, paddingVertical: 28, paddingHorizontal: 24, alignItems: 'center' },

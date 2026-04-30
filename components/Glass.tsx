@@ -26,10 +26,10 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 export function useColors(): GlassColors {
-  const { isGreyscale, accentColor, isTextLarge } = useTheme();
+  const { isGreyscale, accentColor, textSize } = useTheme();
   const accent = isGreyscale ? GLASS.accent : accentColor;
   const accentSubtle = isGreyscale ? GLASS.accentSubtle : hexToRgba(accentColor, 0.08);
-  const textScale = isTextLarge ? 1.2 : 1;
+  const textScale = textSize === 'large' ? 1.2 : textSize === 'small' ? 0.85 : 1;
   return { ...GLASS, accent, accentSubtle, textScale };
 }
 
