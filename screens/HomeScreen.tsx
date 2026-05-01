@@ -249,7 +249,7 @@ export default function HomeScreen({ navigation }: any) {
 
         {/* Job Referral + Sunset Calculator */}
         <View style={[styles.row, { height: cardRowHeight }]}>
-          <TouchableOpacity style={styles.sunsetBtn} onPress={() => navigation.navigate('ComingSoon', { title: 'Job Referral' })}>
+          <TouchableOpacity style={styles.sunsetBtn} onPress={() => navigation.navigate('JobReferrals')}>
             <Image source={require('../assets/PT_Job_Referral_Icon.png')} style={[styles.sunsetBtnImage, { height: cardRowHeight }]} resizeMode="cover" />
             <View style={styles.cardOverlay}>
               <Text style={styles.cardOverlayText}>JOB REFERRALS</Text>

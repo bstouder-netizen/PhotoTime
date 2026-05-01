@@ -17,9 +17,9 @@ const AppTheme = {
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import LocationsScreen from './screens/LocationsScreen';
-import ShootsScreen from './screens/ShootsScreen';
 import PostJobScreen from './screens/PostJobScreen';
 import JobOpeningsScreen from './screens/JobOpeningsScreen';
+import JobReferralsScreen from './screens/JobReferralsScreen';
 import SearchScreen from './screens/SearchScreen';
 import PortfolioScreen from './screens/PortfolioScreen';
 import ComingSoonScreen from './screens/ComingSoonScreen';
@@ -28,6 +28,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import AboutScreen from './screens/AboutScreen';
 import MerchScreen from './screens/MerchScreen';
 import StoreScreen from './screens/StoreScreen';
+import PhotographerStoreScreen from './screens/PhotographerStoreScreen';
 import PhotographerSearchScreen from './screens/PhotographerSearchScreen';
 import ColorScaleScreen from './screens/ColorScaleScreen';
 import TextSizeScreen from './screens/TextSizeScreen';
@@ -48,6 +49,9 @@ function HomeStackScreen() {
       <HomeStack.Screen name="Profile" component={ProfileScreen} />
       <HomeStack.Screen name="ComingSoon" component={ComingSoonScreen} />
       <HomeStack.Screen name="SunsetCalculator" component={SunsetCalculatorScreen} />
+      <HomeStack.Screen name="JobReferrals" component={JobReferralsScreen} />
+      <HomeStack.Screen name="JobOpenings" component={JobOpeningsScreen} />
+      <HomeStack.Screen name="PostJob" component={PostJobScreen} />
     </HomeStack.Navigator>
   );
 }
@@ -55,9 +59,8 @@ function HomeStackScreen() {
 function ShootsStackScreen() {
   return (
     <ShootsStack.Navigator screenOptions={{ headerShown: false }}>
-      <ShootsStack.Screen name="ShootsMain" component={ShootsScreen} />
-      <ShootsStack.Screen name="PostJob" component={PostJobScreen} />
-      <ShootsStack.Screen name="JobOpenings" component={JobOpeningsScreen} />
+      <ShootsStack.Screen name="ShootsMain" component={PhotographerSearchScreen} />
+      <ShootsStack.Screen name="Profile" component={ProfileScreen} />
     </ShootsStack.Navigator>
   );
 }
@@ -70,6 +73,7 @@ function SearchStackScreen() {
       <SearchStack.Screen name="About" component={AboutScreen} />
       <SearchStack.Screen name="Merch" component={MerchScreen} />
       <SearchStack.Screen name="Store" component={StoreScreen} />
+      <SearchStack.Screen name="PhotographerStore" component={PhotographerStoreScreen} />
       <SearchStack.Screen name="PhotographerSearch" component={PhotographerSearchScreen} />
       <SearchStack.Screen name="ColorScale" component={ColorScaleScreen} />
       <SearchStack.Screen name="TextSize" component={TextSizeScreen} />
@@ -88,7 +92,7 @@ const TAB_LABELS: Record<string, string> = {
   Home: 'Home',
   Locations: 'Locations',
   Shoots: 'Shoots',
-  Search: 'Photography Stuff',
+  Search: 'Jobs & Gigs',
   Portfolio: 'Portfolio',
 };
 
@@ -214,7 +218,7 @@ function ShootsTabIcon({ focused }: { focused: boolean }) {
         justifyContent: 'center',
       }}
     >
-      <MaterialCommunityIcons name="weather-sunset" size={ICON_SIZE} color={color} />
+      <MaterialCommunityIcons name="magnify" size={ICON_SIZE} color={color} />
     </View>
   );
 }

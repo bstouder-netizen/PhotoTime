@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
 import { GlassPanel, useColors, GlassColors } from '../components/Glass';
 import { PHOTO_SPECIALTIES } from '../lib/specialties';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const DEFAULT_LOCATION_PHOTO = 'https://picsum.photos/seed/photolocation/600/400';
 
@@ -28,6 +29,17 @@ type Endorsement = {
   created_at: string;
 };
 
+type StoreItem = {
+  id: string;
+  device_id: string;
+  title: string;
+  description: string | null;
+  price: string | null;
+  image_url: string | null;
+  link: string | null;
+  created_at: string;
+};
+
 type Profile = {
   id?: string;
   device_id: string;
@@ -41,6 +53,7 @@ type Profile = {
   email_public?: boolean;
   website?: string;
   specialty?: string;
+  pricing_tier?: string;
   portfolio_1?: string;
   portfolio_2?: string;
   portfolio_3?: string;
@@ -50,7 +63,7 @@ type Profile = {
 
 const EMPTY = {
   username: '', person_name: '', business_name: '', profile_pic: '',
-  location: '', zip_code: '', email: '', email_public: false, website: '', specialty: '',
+  location: '', zip_code: '', email: '', email_public: false, website: '', specialty: '', pricing_tier: '',
 };
 
 export default function ProfileScreen({ navigation, route }: any) {
@@ -66,7 +79,7 @@ export default function ProfileScreen({ navigation, route }: any) {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState<'info' | 'portfolio' | 'endorsements' | 'locations'>('info');
+  const [tab, setTab] = useState<'info' | 'portfolio' | 'endorsements' | 'locations' | 'store'>('info');
   const [portfolioPics, setPortfolioPics] = useState<(string | null)[]>([null, null, null, null, null]);
   const [portfolioUploading, setPortfolioUploading] = useState<boolean[]>([false, false, false, false, false]);
   const [endorsements, setEndorsements] = useState<Endorsement[]>([]);
@@ -83,6 +96,16 @@ export default function ProfileScreen({ navigation, route }: any) {
   const [locSaving, setLocSaving] = useState(false);
   const [locPhotoUri, setLocPhotoUri] = useState<string | null>(null);
 
+  // Store tab state
+  const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
+  const [storeModalVisible, setStoreModalVisible] = useState(false);
+  const [storeItemTitle, setStoreItemTitle] = useState('');
+  const [storeItemPrice, setStoreItemPrice] = useState('');
+  const [storeItemDescription, setStoreItemDescription] = useState('');
+  const [storeItemImageUrl, setStoreItemImageUrl] = useState('');
+  const [storeItemLink, setStoreItemLink] = useState('');
+  const [storeItemSaving, setStoreItemSaving] = useState(false);
+
   useEffect(() => {
     fetchProfile();
     getDeviceId().then(id => {
@@ -91,8 +114,54 @@ export default function ProfileScreen({ navigation, route }: any) {
       const targetId = viewDeviceId ?? id;
       fetchEndorsements(targetId);
       fetchProfileLocations(targetId);
+      fetchStoreItems(targetId);
     });
   }, [viewDeviceId]);
+
+  const fetchStoreItems = async (deviceId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('store_items')
+        .select('*')
+        .eq('device_id', deviceId)
+        .order('created_at', { ascending: false });
+      if (!error && data) setStoreItems(data);
+    } catch {
+      // table may not exist yet — fail gracefully
+    }
+  };
+
+  const handleAddStoreItem = async () => {
+    if (!storeItemTitle.trim()) { Alert.alert('Required', 'Title is required.'); return; }
+    setStoreItemSaving(true);
+    const { error } = await supabase.from('store_items').insert([{
+      device_id: currentDeviceId,
+      title: storeItemTitle.trim(),
+      price: storeItemPrice.trim() || null,
+      description: storeItemDescription.trim() || null,
+      image_url: storeItemImageUrl.trim() || null,
+      link: storeItemLink.trim() || null,
+    }]);
+    setStoreItemSaving(false);
+    if (error) { Alert.alert('Error', error.message); return; }
+    setStoreItemTitle('');
+    setStoreItemPrice('');
+    setStoreItemDescription('');
+    setStoreItemImageUrl('');
+    setStoreItemLink('');
+    setStoreModalVisible(false);
+    fetchStoreItems(currentDeviceId);
+  };
+
+  const handleDeleteStoreItem = (itemId: string) => {
+    Alert.alert('Delete Item', 'Remove this item from your store?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        await supabase.from('store_items').delete().eq('id', itemId);
+        fetchStoreItems(currentDeviceId);
+      }},
+    ]);
+  };
 
   const fetchProfileLocations = async (deviceId: string) => {
     const { data } = await supabase
@@ -206,7 +275,7 @@ export default function ProfileScreen({ navigation, route }: any) {
         business_name: data.business_name ?? '', profile_pic: data.profile_pic ?? '',
         location: data.location ?? '', zip_code: data.zip_code ?? '',
         email: data.email ?? '', email_public: data.email_public ?? false,
-        website: data.website ?? '', specialty: data.specialty ?? '',
+        website: data.website ?? '', specialty: data.specialty ?? '', pricing_tier: data.pricing_tier ?? '',
       });
       setPortfolioPics([
         data.portfolio_1 || null, data.portfolio_2 || null, data.portfolio_3 || null,
@@ -417,6 +486,21 @@ export default function ProfileScreen({ navigation, route }: any) {
           </GlassPanel>
         </Modal>
 
+        <Text style={styles.label}>Pricing</Text>
+        <View style={styles.pricingRow}>
+          {['$', '$$', '$$$', '$$$$'].map(tier => (
+            <TouchableOpacity
+              key={tier}
+              style={[styles.pricingChip, form.pricing_tier === tier && styles.pricingChipActive]}
+              onPress={() => setForm(f => ({ ...f, pricing_tier: f.pricing_tier === tier ? '' : tier }))}
+            >
+              <Text style={[styles.pricingChipText, form.pricing_tier === tier && styles.pricingChipTextActive]}>
+                {tier}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         <TouchableOpacity style={[styles.button, styles.saveBtn, saving && styles.buttonDisabled]} onPress={handleSave} disabled={saving}>
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save Profile</Text>}
         </TouchableOpacity>
@@ -429,7 +513,7 @@ export default function ProfileScreen({ navigation, route }: any) {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <Header navigation={navigation} onEdit={isViewingOther ? undefined : () => setEditing(true)} />
+      <Header navigation={navigation} onEdit={isViewingOther ? undefined : () => setEditing(true)} onEndorsements={() => setTab('endorsements')} />
 
       <GlassPanel style={styles.identityRow}>
         {profile?.profile_pic
@@ -446,10 +530,10 @@ export default function ProfileScreen({ navigation, route }: any) {
       </GlassPanel>
 
       <GlassPanel style={styles.tabBar}>
-        {(['info', 'portfolio', 'locations', 'endorsements'] as const).map(t => (
+        {(['info', 'portfolio', 'locations', 'endorsements', 'store'] as const).map(t => (
           <TouchableOpacity key={t} style={[styles.tabItem, tab === t && styles.tabItemActive]} onPress={() => setTab(t)}>
             <Text style={[styles.tabLabel, tab === t && styles.tabLabelActive]}>
-              {t === 'endorsements' ? '★' : t === 'locations' ? '📍' : t.charAt(0).toUpperCase() + t.slice(1)}
+              {t === 'endorsements' ? '★' : t === 'locations' ? '📍' : t === 'store' ? '🛍️' : t.charAt(0).toUpperCase() + t.slice(1)}
             </Text>
           </TouchableOpacity>
         ))}
@@ -521,6 +605,7 @@ export default function ProfileScreen({ navigation, route }: any) {
           {profile?.location ? <InfoRow label="Location" value={profile.location} /> : null}
           {profile?.zip_code ? <InfoRow label="Zip Code" value={profile.zip_code} /> : null}
           {profile?.specialty ? <InfoRow label="Specialty" value={profile.specialty} /> : null}
+          {profile?.pricing_tier ? <InfoRow label="Pricing" value={profile.pricing_tier} /> : null}
 
           {((profile?.email && profile?.email_public) || profile?.website) &&
             <Text style={styles.contactSectionLabel}>CONTACT</Text>}
@@ -541,6 +626,53 @@ export default function ProfileScreen({ navigation, route }: any) {
                 <Text style={styles.contactArrow}>›</Text>
               </GlassPanel>
             </TouchableOpacity>
+          )}
+        </ScrollView>
+      ) : tab === 'store' ? (
+        <ScrollView contentContainerStyle={[styles.storeContainer, { paddingBottom: insets.bottom + 90 }]}>
+          {!isViewingOther && (
+            <TouchableOpacity style={styles.addStoreBtn} onPress={() => setStoreModalVisible(true)}>
+              <Text style={styles.addStoreBtnText}>＋  Add Item</Text>
+            </TouchableOpacity>
+          )}
+          {storeItems.length === 0 ? (
+            <GlassPanel style={styles.emptyEndorse}>
+              <Text style={styles.emptyEndorseText}>
+                {isViewingOther ? 'No store items yet.' : 'No items in your store yet.'}
+              </Text>
+            </GlassPanel>
+          ) : (
+            storeItems.map(item => (
+              <GlassPanel key={item.id} style={styles.storeCard}>
+                {item.image_url ? (
+                  <Image source={{ uri: item.image_url }} style={styles.storeCardImage} resizeMode="cover" />
+                ) : null}
+                <View style={styles.storeCardBody}>
+                  <View style={styles.storeCardTitleRow}>
+                    <Text style={styles.storeCardTitle}>{item.title}</Text>
+                    {item.price ? <Text style={styles.storeCardPrice}>{item.price}</Text> : null}
+                    {!isViewingOther && (
+                      <TouchableOpacity onPress={() => handleDeleteStoreItem(item.id)} style={styles.storeCardDelete}>
+                        <Text style={styles.storeCardDeleteText}>✕</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  {item.description ? (
+                    <Text style={styles.storeCardDesc}>{item.description}</Text>
+                  ) : null}
+                  {item.link ? (
+                    <TouchableOpacity
+                      onPress={() => {
+                        const url = item.link!.startsWith('http') ? item.link! : `https://${item.link}`;
+                        Linking.openURL(url).catch(() => {});
+                      }}
+                    >
+                      <Text style={styles.storeCardLink}>View Item →</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </GlassPanel>
+            ))
           )}
         </ScrollView>
       ) : (
@@ -589,6 +721,58 @@ export default function ProfileScreen({ navigation, route }: any) {
         onSubmit={handleEndorse}
         submitting={endorseSubmitting}
       />
+
+      <Modal visible={!isViewingOther && storeModalVisible} transparent animationType="slide">
+        <View style={styles.locOverlay}>
+          <GlassPanel style={{ ...styles.locSheet, paddingBottom: insets.bottom + 16 }}>
+            <View style={styles.locSheetHeader}>
+              <Text style={styles.locSheetTitle}>🛍️ Add Store Item</Text>
+              <TouchableOpacity onPress={() => setStoreModalVisible(false)}>
+                <Text style={styles.locSheetCancel}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={styles.label}>Title *</Text>
+              <GlassPanel style={styles.inputWrap}>
+                <TextInput style={styles.input} value={storeItemTitle} onChangeText={setStoreItemTitle}
+                  placeholder="e.g. Print Pack – 8x10" placeholderTextColor={C.textMuted} />
+              </GlassPanel>
+              <Text style={styles.label}>Price</Text>
+              <GlassPanel style={styles.inputWrap}>
+                <TextInput style={styles.input} value={storeItemPrice} onChangeText={setStoreItemPrice}
+                  placeholder="e.g. $49" placeholderTextColor={C.textMuted} />
+              </GlassPanel>
+              <Text style={styles.label}>Description</Text>
+              <GlassPanel style={styles.inputWrap}>
+                <TextInput style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
+                  value={storeItemDescription} onChangeText={setStoreItemDescription}
+                  placeholder="Describe what you're selling..."
+                  placeholderTextColor={C.textMuted} multiline numberOfLines={3} />
+              </GlassPanel>
+              <Text style={styles.label}>Image URL</Text>
+              <GlassPanel style={styles.inputWrap}>
+                <TextInput style={styles.input} value={storeItemImageUrl} onChangeText={setStoreItemImageUrl}
+                  placeholder="https://..." placeholderTextColor={C.textMuted}
+                  keyboardType="url" autoCapitalize="none" />
+              </GlassPanel>
+              <Text style={styles.label}>Link</Text>
+              <GlassPanel style={styles.inputWrap}>
+                <TextInput style={styles.input} value={storeItemLink} onChangeText={setStoreItemLink}
+                  placeholder="https://..." placeholderTextColor={C.textMuted}
+                  keyboardType="url" autoCapitalize="none" />
+              </GlassPanel>
+              <TouchableOpacity
+                style={[styles.button, styles.saveBtn, storeItemSaving && styles.buttonDisabled]}
+                onPress={handleAddStoreItem} disabled={storeItemSaving}
+              >
+                {storeItemSaving
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.buttonText}>Add to Store</Text>}
+              </TouchableOpacity>
+            </ScrollView>
+          </GlassPanel>
+        </View>
+      </Modal>
 
       <Modal visible={!isViewingOther && locModalVisible} transparent animationType="slide">
         <View style={styles.locOverlay}>
@@ -718,7 +902,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Header({ navigation, onEdit }: { navigation: any; onEdit?: () => void }) {
+function Header({ navigation, onEdit, onEndorsements }: { navigation: any; onEdit?: () => void; onEndorsements?: () => void }) {
   const C = useColors();
   const styles = useMemo(() => makeStyles(C), [C]);
   return (
@@ -727,8 +911,24 @@ function Header({ navigation, onEdit }: { navigation: any; onEdit?: () => void }
         <Text style={styles.back}>← Back</Text>
       </TouchableOpacity>
       <View style={styles.headerRow}>
-        <Text style={styles.heading}>Profile</Text>
-        {onEdit && <TouchableOpacity onPress={onEdit}><Text style={styles.editLink}>Edit</Text></TouchableOpacity>}
+        <View style={styles.headerActions}>
+          {onEndorsements && (
+            <TouchableOpacity onPress={onEndorsements} style={styles.headerIconBtn}>
+              <MaterialCommunityIcons name="trophy-outline" size={22} color={C.accent} />
+            </TouchableOpacity>
+          )}
+          {onEdit && (
+            <TouchableOpacity onPress={onEdit} style={styles.headerIconBtn}>
+              <MaterialCommunityIcons name="pencil-outline" size={22} color={C.accent} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Search', { screen: 'Settings' })}
+            style={styles.headerIconBtn}
+          >
+            <MaterialCommunityIcons name="cog-outline" size={22} color={C.accent} />
+          </TouchableOpacity>
+        </View>
       </View>
     </GlassPanel>
   );
@@ -740,6 +940,8 @@ const makeStyles = (C: GlassColors) => StyleSheet.create({
 
   header: { borderRadius: 18, marginBottom: 8, paddingHorizontal: 16, paddingVertical: 8 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerIconBtn: { padding: 4 },
   back: { color: C.accent, fontSize: Math.round(15 * C.textScale), marginBottom: 4 },
   heading: { fontSize: Math.round(22 * C.textScale), fontWeight: '700', color: C.text },
   editLink: { color: C.accent, fontSize: Math.round(15 * C.textScale), fontWeight: '600' },
@@ -876,4 +1078,25 @@ const makeStyles = (C: GlassColors) => StyleSheet.create({
   pickerItemText: { fontSize: Math.round(16 * C.textScale), color: C.textSub },
   pickerItemSelected: { color: C.text, fontWeight: '600' },
   pickerCheck: { color: C.accent, fontSize: Math.round(16 * C.textScale), fontWeight: '700' },
+
+  pricingRow: { flexDirection: 'row', gap: 10, marginHorizontal: 20 },
+  pricingChip: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 12, backgroundColor: C.accentSubtle, borderWidth: 1, borderColor: C.border },
+  pricingChipActive: { backgroundColor: C.accent, borderColor: C.accent },
+  pricingChipText: { fontSize: Math.round(15 * C.textScale), fontWeight: '700', color: C.textSub },
+  pricingChipTextActive: { color: '#fff' },
+
+  // Store tab
+  storeContainer: { paddingBottom: 32, gap: 10 },
+  addStoreBtn: { backgroundColor: C.accent, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
+  addStoreBtnText: { color: '#fff', fontSize: Math.round(15 * C.textScale), fontWeight: '700' },
+  storeCard: { borderRadius: 18, overflow: 'hidden' },
+  storeCardImage: { width: '100%', height: 180 },
+  storeCardBody: { padding: 14 },
+  storeCardTitleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
+  storeCardTitle: { flex: 1, fontSize: Math.round(16 * C.textScale), fontWeight: '700', color: C.text },
+  storeCardPrice: { fontSize: Math.round(15 * C.textScale), fontWeight: '700', color: C.accent },
+  storeCardDelete: { paddingLeft: 6, paddingTop: 2 },
+  storeCardDeleteText: { fontSize: Math.round(14 * C.textScale), color: C.textMuted, fontWeight: '600' },
+  storeCardDesc: { fontSize: Math.round(13 * C.textScale), color: C.textSub, lineHeight: 19, marginBottom: 8 },
+  storeCardLink: { fontSize: Math.round(14 * C.textScale), fontWeight: '700', color: C.accent },
 });
