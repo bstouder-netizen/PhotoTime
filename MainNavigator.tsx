@@ -79,6 +79,8 @@ function SearchStackScreen() {
       <SearchStack.Screen name="TextSize" component={TextSizeScreen} />
       <SearchStack.Screen name="BackgroundImage" component={BackgroundImageScreen} />
       <SearchStack.Screen name="UpgradeToPro" component={UpgradeToProScreen} />
+      <SearchStack.Screen name="PostJob" component={PostJobScreen} />
+      <SearchStack.Screen name="JobOpenings" component={JobOpeningsScreen} />
       <SearchStack.Screen name="ComingSoon" component={ComingSoonScreen} />
     </SearchStack.Navigator>
   );

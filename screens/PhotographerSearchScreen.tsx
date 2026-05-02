@@ -1,9 +1,10 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, FlatList, Modal, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Image,
+  ActivityIndicator, Image, RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { GlassPanel, useColors, GlassColors } from '../components/Glass';
 import { PHOTO_SPECIALTIES } from '../lib/specialties';
@@ -31,7 +32,7 @@ type Photographer = {
   business_name?: string;
   location?: string;
   profile_pic?: string;
-  pricing_tier?: string;
+  pricing_tier?: string | null;
 };
 
 type PayFilter = '' | 'under_500' | '500_1000' | 'over_1000';
@@ -68,14 +69,19 @@ export default function PhotographerSearchScreen({ navigation }: any) {
   const [endorsedOnly, setEndorsedOnly]       = useState(false);
   const [specialtyPickerVisible, setSpecialtyPickerVisible] = useState(false);
   const [loading, setLoading]                 = useState(true);
+  const [refreshing, setRefreshing]           = useState(false);
 
-  useEffect(() => {
+  const loadProfiles = useCallback(() => {
     supabase
       .from('profiles')
       .select('id, device_id, username, person_name, business_name, location, profile_pic, pricing_tier')
       .limit(10000)
-      .then(({ data }) => { setAllProfiles(data ?? []); setLoading(false); });
+      .then(({ data }) => { setAllProfiles(data ?? []); setLoading(false); setRefreshing(false); });
+  }, []);
 
+  useFocusEffect(useCallback(() => { loadProfiles(); }, [loadProfiles]));
+
+  useEffect(() => {
     supabase
       .from('job_postings')
       .select('device_id, pay')
@@ -202,6 +208,13 @@ export default function PhotographerSearchScreen({ navigation }: any) {
             data={filtered}
             keyExtractor={item => item.id}
             contentContainerStyle={styles.list}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => { setRefreshing(true); loadProfiles(); }}
+                tintColor={C.accent}
+              />
+            }
             ListEmptyComponent={
               <GlassPanel style={styles.emptyCard}>
                 <Text style={styles.emptyText}>No photographers found.</Text>

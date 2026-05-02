@@ -333,13 +333,34 @@ export default function ProfileScreen({ navigation, route }: any) {
     if (!form.username.trim()) { Alert.alert('Required', 'User Name is required.'); return; }
     setSaving(true);
     const deviceId = await getDeviceId();
-    const payload = { ...form, device_id: deviceId, location: form.location.trim() || null };
-    let error;
+
+    // Explicit payload — only stable columns
+    const corePayload: Record<string, any> = {
+      device_id:     deviceId,
+      username:      form.username.trim(),
+      person_name:   form.person_name.trim()   || null,
+      business_name: form.business_name.trim() || null,
+      profile_pic:   form.profile_pic          || null,
+      location:      form.location.trim()      || null,
+      zip_code:      form.zip_code.trim()      || null,
+      email:         form.email.trim()         || null,
+      email_public:  form.email_public,
+      website:       form.website.trim()       || null,
+      pricing_tier:  (form as any).pricing_tier || null,
+    };
+
+    let error: any;
     if (profile?.id) {
-      ({ error } = await supabase.from('profiles').update(payload).eq('id', profile.id));
+      ({ error } = await supabase.from('profiles').update(corePayload).eq('id', profile.id));
     } else {
-      ({ error } = await supabase.from('profiles').insert([payload]));
+      ({ error } = await supabase.from('profiles').insert([corePayload]));
     }
+
+    // Specialty saved separately — silently skips if column not yet in DB
+    if (!error && profile?.id && (form as any).specialty !== undefined) {
+      await supabase.from('profiles').update({ specialty: (form as any).specialty || null }).eq('id', profile.id);
+    }
+
     setSaving(false);
     if (error) { Alert.alert('Error', error.message); }
     else { setLocalImageUri(null); await fetchProfile(); setEditing(false); }
@@ -606,8 +627,12 @@ export default function ProfileScreen({ navigation, route }: any) {
           {profile?.zip_code ? <InfoRow label="Zip Code" value={profile.zip_code} /> : null}
           {profile?.specialty ? <InfoRow label="Specialty" value={profile.specialty} /> : null}
           {profile?.pricing_tier ? <InfoRow label="Pricing" value={profile.pricing_tier} /> : null}
+          {/* Show email on own profile always; on others only if public */}
+          {profile?.email && (!isViewingOther || profile.email_public)
+            ? <InfoRow label="Email" value={profile.email} />
+            : null}
 
-          {((profile?.email && profile?.email_public) || profile?.website) &&
+          {profile?.website &&
             <Text style={styles.contactSectionLabel}>CONTACT</Text>}
           {profile?.email && profile?.email_public && (
             <TouchableOpacity onPress={() => Linking.openURL(`mailto:${profile.email}`)}>
@@ -906,31 +931,33 @@ function Header({ navigation, onEdit, onEndorsements }: { navigation: any; onEdi
   const C = useColors();
   const styles = useMemo(() => makeStyles(C), [C]);
   return (
-    <GlassPanel style={styles.header}>
-      <TouchableOpacity onPress={() => navigation.goBack()}>
-        <Text style={styles.back}>← Back</Text>
+    <View style={styles.headerBar}>
+      {/* Left: back button */}
+      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBackBtn}>
+        <MaterialCommunityIcons name="chevron-left" size={24} color={C.accent} />
+        <Text style={styles.back}>Back</Text>
       </TouchableOpacity>
-      <View style={styles.headerRow}>
-        <View style={styles.headerActions}>
-          {onEndorsements && (
-            <TouchableOpacity onPress={onEndorsements} style={styles.headerIconBtn}>
-              <MaterialCommunityIcons name="trophy-outline" size={22} color={C.accent} />
-            </TouchableOpacity>
-          )}
-          {onEdit && (
-            <TouchableOpacity onPress={onEdit} style={styles.headerIconBtn}>
-              <MaterialCommunityIcons name="pencil-outline" size={22} color={C.accent} />
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Search', { screen: 'Settings' })}
-            style={styles.headerIconBtn}
-          >
-            <MaterialCommunityIcons name="cog-outline" size={22} color={C.accent} />
+
+      {/* Right: trophy + edit + settings */}
+      <View style={styles.headerRight}>
+        {onEndorsements && (
+          <TouchableOpacity onPress={onEndorsements} style={styles.headerIconBtn}>
+            <MaterialCommunityIcons name="trophy-outline" size={22} color={C.accent} />
           </TouchableOpacity>
-        </View>
+        )}
+        {onEdit && (
+          <TouchableOpacity onPress={onEdit} style={styles.headerIconBtn}>
+            <MaterialCommunityIcons name="pencil-outline" size={22} color={C.accent} />
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Search', { screen: 'Settings' })}
+          style={styles.headerIconBtn}
+        >
+          <MaterialCommunityIcons name="cog-outline" size={22} color={C.accent} />
+        </TouchableOpacity>
       </View>
-    </GlassPanel>
+    </View>
   );
 }
 
@@ -939,10 +966,14 @@ const makeStyles = (C: GlassColors) => StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
 
   header: { borderRadius: 18, marginBottom: 8, paddingHorizontal: 16, paddingVertical: 8 },
+  headerBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10, marginBottom: 8 },
+  headerLeft: { flex: 1, alignItems: 'flex-start' },
+  headerRight: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 12 },
+  headerBackBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   headerIconBtn: { padding: 4 },
-  back: { color: C.accent, fontSize: Math.round(15 * C.textScale), marginBottom: 4 },
+  back: { color: C.accent, fontSize: Math.round(15 * C.textScale), fontWeight: '600' },
   heading: { fontSize: Math.round(22 * C.textScale), fontWeight: '700', color: C.text },
   editLink: { color: C.accent, fontSize: Math.round(15 * C.textScale), fontWeight: '600' },
 
