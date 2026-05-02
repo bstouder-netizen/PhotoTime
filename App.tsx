@@ -6,6 +6,8 @@ LogBox.ignoreLogs([
   'Push foreground listener failed',
   'No Firebase App',
   'firebase',
+  'Unable to find',
+  'Possible Unhandled Promise Rejection',
 ]);
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import MainNavigator from './MainNavigator';

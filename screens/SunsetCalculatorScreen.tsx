@@ -73,16 +73,25 @@ export default function SunsetCalculatorScreen({ navigation }: any) {
     setSaving(true);
     try {
       const deviceId = await getDeviceId();
-      const { data: prof } = await supabase.from('profiles').select('username').eq('device_id', deviceId).single();
-      const { error: err } = await supabase.from('scouted_locations').insert([{
+      // Look up username but don't require a profile to exist
+      const { data: prof } = await supabase.from('profiles').select('username').eq('device_id', deviceId).maybeSingle();
+
+      const payload: Record<string, any> = {
         name: locationName,
         latitude: coords.lat,
         longitude: coords.lng,
-        device_id: deviceId,
         posted_by: prof?.username ?? '',
-      }]);
-      if (err) { Alert.alert('Error', err.message); }
-      else { setSaved(true); }
+      };
+      // Only link device_id if a profile exists (avoids FK constraint error)
+      if (prof) payload.device_id = deviceId;
+
+      const { error: err } = await supabase.from('scouted_locations').insert([payload]);
+      if (err) {
+        Alert.alert('Save Failed', err.message);
+      } else {
+        setSaved(true);
+        Alert.alert('Saved!', `${locationName} has been added to your scouted locations.`);
+      }
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Unknown error');
     }
@@ -105,8 +114,18 @@ export default function SunsetCalculatorScreen({ navigation }: any) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.back}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.heading}>🌅 Sunset Calculator</Text>
-        <Text style={styles.subheading}>Plan your shoot around perfect light</Text>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.heading}>🌅 Sunset Calculator</Text>
+            <Text style={styles.subheading}>Plan your shoot around perfect light</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Profile', { initialTab: 'locations' })}
+            style={styles.headerPin}
+          >
+            <Text style={styles.headerPinIcon}>📍</Text>
+          </TouchableOpacity>
+        </View>
       </GlassPanel>
 
       {/* Location + Date row */}
@@ -202,6 +221,9 @@ const makeStyles = (C: GlassColors) => StyleSheet.create({
 
   header: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10 },
   back: { color: C.accent, fontSize: Math.round(14 * C.textScale), marginBottom: 4 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerPin: { padding: 4 },
+  headerPinIcon: { fontSize: Math.round(24 * C.textScale) },
   heading: { fontSize: Math.round(20 * C.textScale), fontWeight: '800', color: C.text, marginBottom: 1 },
   subheading: { fontSize: Math.round(12 * C.textScale), color: C.textMuted },
 

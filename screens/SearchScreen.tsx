@@ -25,14 +25,6 @@ export default function SearchScreen({ navigation }: any) {
       </GlassPanel>
 
       <View style={styles.body}>
-        <TouchableOpacity onPress={() => navigation.navigate('PostJob')}>
-          <GlassPanel style={styles.actionCard}>
-            <Text style={styles.actionIcon}>📋</Text>
-            <Text style={styles.actionTitle}>Post a Job</Text>
-            <Text style={styles.actionSub}>Share a photography opportunity</Text>
-          </GlassPanel>
-        </TouchableOpacity>
-
         <TouchableOpacity onPress={() => navigation.navigate('JobOpenings')}>
           <GlassPanel style={styles.actionCard}>
             <Text style={styles.actionIcon}>🔍</Text>

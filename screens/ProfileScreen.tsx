@@ -47,6 +47,7 @@ type Profile = {
   person_name: string;
   business_name: string;
   profile_pic: string;
+  banner_url?: string;
   location: string;
   zip_code: string;
   email?: string;
@@ -62,7 +63,7 @@ type Profile = {
 };
 
 const EMPTY = {
-  username: '', person_name: '', business_name: '', profile_pic: '',
+  username: '', person_name: '', business_name: '', profile_pic: '', banner_url: '',
   location: '', zip_code: '', email: '', email_public: false, website: '', specialty: '', pricing_tier: '',
 };
 
@@ -79,7 +80,7 @@ export default function ProfileScreen({ navigation, route }: any) {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState<'info' | 'portfolio' | 'endorsements' | 'locations' | 'store'>('info');
+  const [tab, setTab] = useState<'info' | 'portfolio' | 'endorsements' | 'locations' | 'store' | 'connections'>(route?.params?.initialTab ?? 'info');
   const [portfolioPics, setPortfolioPics] = useState<(string | null)[]>([null, null, null, null, null]);
   const [portfolioUploading, setPortfolioUploading] = useState<boolean[]>([false, false, false, false, false]);
   const [endorsements, setEndorsements] = useState<Endorsement[]>([]);
@@ -95,6 +96,12 @@ export default function ProfileScreen({ navigation, route }: any) {
   const [locAddress, setLocAddress] = useState('');
   const [locSaving, setLocSaving] = useState(false);
   const [locPhotoUri, setLocPhotoUri] = useState<string | null>(null);
+
+  // Connections
+  const [connections, setConnections] = useState<{ id: string; device_id: string; username: string; business_name: string | null; profile_pic: string | null }[]>([]);
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionId, setConnectionId] = useState<string | null>(null);
+  const [connectLoading, setConnectLoading] = useState(false);
 
   // Store tab state
   const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
@@ -115,8 +122,72 @@ export default function ProfileScreen({ navigation, route }: any) {
       fetchEndorsements(targetId);
       fetchProfileLocations(targetId);
       fetchStoreItems(targetId);
+      fetchConnections(id, targetId);
     });
   }, [viewDeviceId]);
+
+  const fetchConnections = async (myId: string, targetId: string) => {
+    try {
+      // People that targetId has connected to
+      const { data: outgoing } = await supabase
+        .from('connections')
+        .select('id, to_device_id')
+        .eq('from_device_id', targetId);
+
+      const toIds = (outgoing ?? []).map(r => r.to_device_id);
+      if (toIds.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('device_id, username, business_name, profile_pic')
+          .in('device_id', toIds);
+        setConnections((profs ?? []).map(p => ({
+          id: p.device_id,
+          device_id: p.device_id,
+          username: p.username,
+          business_name: p.business_name ?? null,
+          profile_pic: p.profile_pic ?? null,
+        })));
+      } else {
+        setConnections([]);
+      }
+
+      // Check if myId → targetId connection exists
+      if (myId && myId !== targetId) {
+        const { data: check } = await supabase
+          .from('connections')
+          .select('id')
+          .eq('from_device_id', myId)
+          .eq('to_device_id', targetId)
+          .maybeSingle();
+        setIsConnected(!!check);
+        setConnectionId(check?.id ?? null);
+      }
+    } catch {
+      // connections table may not exist yet — fail silently
+    }
+  };
+
+  const handleConnect = async () => {
+    setConnectLoading(true);
+    try {
+      if (isConnected && connectionId) {
+        await supabase.from('connections').delete().eq('id', connectionId);
+        setIsConnected(false);
+        setConnectionId(null);
+      } else {
+        const { data } = await supabase
+          .from('connections')
+          .insert([{ from_device_id: currentDeviceId, to_device_id: viewDeviceId }])
+          .select('id')
+          .single();
+        setIsConnected(true);
+        setConnectionId(data?.id ?? null);
+      }
+    } catch {
+      // fail silently
+    }
+    setConnectLoading(false);
+  };
 
   const fetchStoreItems = async (deviceId: string) => {
     try {
@@ -273,6 +344,7 @@ export default function ProfileScreen({ navigation, route }: any) {
       setForm({
         username: data.username ?? '', person_name: data.person_name ?? '',
         business_name: data.business_name ?? '', profile_pic: data.profile_pic ?? '',
+        banner_url: data.banner_url ?? '',
         location: data.location ?? '', zip_code: data.zip_code ?? '',
         email: data.email ?? '', email_public: data.email_public ?? false,
         website: data.website ?? '', specialty: data.specialty ?? '', pricing_tier: data.pricing_tier ?? '',
@@ -283,6 +355,23 @@ export default function ProfileScreen({ navigation, route }: any) {
       ]);
     }
     setLoading(false);
+  };
+
+  const pickBannerImage = () => {
+    launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async response => {
+      if (response.didCancel || response.errorCode) return;
+      const asset = response.assets?.[0];
+      if (!asset?.uri) return;
+      const deviceId = await getDeviceId();
+      const fileName = `banners/${deviceId}.jpg`;
+      const blob = await (await fetch(asset.uri)).blob();
+      const arrayBuffer = await new Response(blob).arrayBuffer();
+      const { error: uploadError } = await supabase.storage
+        .from('avatars').upload(fileName, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
+      if (uploadError) { Alert.alert('Upload failed', uploadError.message); return; }
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
+      setForm(f => ({ ...f, banner_url: `${urlData.publicUrl}?t=${Date.now()}` }));
+    });
   };
 
   const pickImage = () => {
@@ -299,7 +388,7 @@ export default function ProfileScreen({ navigation, route }: any) {
         .from('avatars').upload(fileName, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
       if (uploadError) { Alert.alert('Upload failed', uploadError.message); return; }
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
-      setForm(f => ({ ...f, profile_pic: urlData.publicUrl }));
+      setForm(f => ({ ...f, profile_pic: `${urlData.publicUrl}?t=${Date.now()}` }));
     });
   };
 
@@ -346,7 +435,6 @@ export default function ProfileScreen({ navigation, route }: any) {
       email:         form.email.trim()         || null,
       email_public:  form.email_public,
       website:       form.website.trim()       || null,
-      pricing_tier:  (form as any).pricing_tier || null,
     };
 
     let error: any;
@@ -356,9 +444,15 @@ export default function ProfileScreen({ navigation, route }: any) {
       ({ error } = await supabase.from('profiles').insert([corePayload]));
     }
 
-    // Specialty saved separately — silently skips if column not yet in DB
-    if (!error && profile?.id && (form as any).specialty !== undefined) {
-      await supabase.from('profiles').update({ specialty: (form as any).specialty || null }).eq('id', profile.id);
+    // Save migrated columns separately — each fails silently if not yet in DB
+    if (!error && profile?.id) {
+      const extras: Record<string, any> = {
+        specialty:    (form as any).specialty    || null,
+        pricing_tier: (form as any).pricing_tier || null,
+        banner_url:   (form as any).banner_url   || null,
+      };
+      const { error: extErr } = await supabase.from('profiles').update(extras).eq('id', profile.id);
+      if (extErr) console.warn('Extra columns save:', extErr.message);
     }
 
     setSaving(false);
@@ -402,7 +496,20 @@ export default function ProfileScreen({ navigation, route }: any) {
         contentContainerStyle={[styles.formContainer, { paddingTop: insets.top + 16 }]}
         keyboardShouldPersistTaps="handled"
       >
+        <TouchableOpacity onPress={() => { setLocalImageUri(null); setEditing(false); }} style={styles.formBackBtn}>
+          <Text style={styles.formBackText}>← Back</Text>
+        </TouchableOpacity>
         <Text style={styles.formHeading}>{profile ? 'Edit Profile' : 'Create Profile'}</Text>
+
+        <Text style={styles.label}>Background Photo</Text>
+        <TouchableOpacity style={styles.bannerPicker} onPress={pickBannerImage}>
+          {(form as any).banner_url
+            ? <Image source={{ uri: (form as any).banner_url }} style={styles.bannerPreview} resizeMode="cover" />
+            : <View style={styles.bannerPlaceholder}><Text style={styles.avatarPlaceholderText}>🖼️  Choose Banner</Text></View>}
+          <View style={styles.bannerEditBadge}>
+            <Text style={styles.bannerEditBadgeText}>{(form as any).banner_url ? 'Change' : 'Add'}</Text>
+          </View>
+        </TouchableOpacity>
 
         <Text style={styles.label}>Profile Pic</Text>
         <TouchableOpacity style={styles.avatarPicker} onPress={pickImage}>
@@ -528,6 +635,7 @@ export default function ProfileScreen({ navigation, route }: any) {
         <TouchableOpacity style={styles.cancelButton} onPress={() => { setLocalImageUri(null); setEditing(false); }}>
           <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
+        <View style={{ height: 40 }} />
       </ScrollView>
     );
   }
@@ -536,25 +644,63 @@ export default function ProfileScreen({ navigation, route }: any) {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <Header navigation={navigation} onEdit={isViewingOther ? undefined : () => setEditing(true)} onEndorsements={() => setTab('endorsements')} />
 
-      <GlassPanel style={styles.identityRow}>
-        {profile?.profile_pic
-          ? <Image source={{ uri: profile.profile_pic }} style={styles.avatar} />
-          : <View style={styles.avatarCircle}><Text style={styles.avatarLabel}>PIC</Text></View>}
-        <View style={styles.identityText}>
-          <Text style={styles.username}>@{profile?.username}</Text>
-          {profile?.person_name ? <Text style={styles.personName}>{profile.person_name}</Text> : null}
-          {profile?.business_name ? <Text style={styles.businessName}>{profile.business_name}</Text> : null}
-          {(profile?.location || profile?.zip_code)
-            ? <Text style={styles.locationText}>📍 {[profile.location, profile.zip_code].filter(Boolean).join(', ')}</Text>
+      {/* Banner + avatar wrapper */}
+      <View style={styles.heroWrapper}>
+        <View style={styles.heroContainer}>
+          <Image
+            source={profile?.banner_url ? { uri: profile.banner_url } : require('../assets/PT_Background.png')}
+            style={styles.heroBanner}
+            resizeMode="cover"
+          />
+          <View style={styles.heroOverlay} />
+        </View>
+        {/* Avatar pinned to lower-left of banner */}
+        <View style={styles.heroAvatarAnchor}>
+          <View style={styles.heroAvatarWrap}>
+            {profile?.profile_pic
+              ? <Image source={{ uri: profile.profile_pic }} style={styles.heroAvatar} />
+              : <View style={styles.heroAvatarPlaceholder}><Text style={styles.heroAvatarLabel}>PIC</Text></View>}
+          </View>
+        </View>
+      </View>
+
+      {/* Identity below banner */}
+      <View style={styles.identitySection}>
+        <View style={styles.identityPersonRow}>
+          {profile?.person_name
+            ? <Text style={styles.identityPersonName}>{profile.person_name}</Text>
+            : null}
+          <Text style={styles.identityUsername}>@{profile?.username}</Text>
+        </View>
+        {profile?.location
+          ? <Text style={styles.identityLocation}>📍 {profile.location}</Text>
+          : null}
+        <View style={styles.identityNamePriceRow}>
+          {profile?.business_name
+            ? <Text style={styles.identityBusiness} numberOfLines={1}>{profile.business_name}</Text>
+            : null}
+          {profile?.pricing_tier
+            ? <Text style={styles.identityPriceInline}>{profile.pricing_tier}</Text>
             : null}
         </View>
-      </GlassPanel>
+        {isViewingOther && (
+          <TouchableOpacity
+            style={[styles.connectBtn, isConnected && styles.connectBtnActive]}
+            onPress={handleConnect}
+            disabled={connectLoading}
+          >
+            <Text style={[styles.connectBtnText, isConnected && styles.connectBtnTextActive]}>
+              {connectLoading ? '...' : isConnected ? '✓ Connected' : '+ Connect'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       <GlassPanel style={styles.tabBar}>
-        {(['info', 'portfolio', 'locations', 'endorsements', 'store'] as const).map(t => (
+        {(['info', 'portfolio', 'locations', 'endorsements', 'store', 'connections'] as const).map(t => (
           <TouchableOpacity key={t} style={[styles.tabItem, tab === t && styles.tabItemActive]} onPress={() => setTab(t)}>
             <Text style={[styles.tabLabel, tab === t && styles.tabLabelActive]}>
-              {t === 'endorsements' ? '★' : t === 'locations' ? '📍' : t === 'store' ? '🛍️' : t.charAt(0).toUpperCase() + t.slice(1)}
+              {t === 'endorsements' ? '★' : t === 'locations' ? '📍' : t === 'store' ? '🛍️' : t === 'connections' ? '🔗' : t.charAt(0).toUpperCase() + t.slice(1)}
             </Text>
           </TouchableOpacity>
         ))}
@@ -574,13 +720,13 @@ export default function ProfileScreen({ navigation, route }: any) {
           ) : (
             profileLocations.map(loc => (
               <GlassPanel key={loc.id} style={styles.locCard}>
-                <Image
-                  source={{ uri: loc.photo_url || DEFAULT_LOCATION_PHOTO }}
-                  style={styles.locPhoto}
-                  resizeMode="cover"
-                />
                 <View style={styles.locCardRow}>
-                  <View style={{ flex: 1 }}>
+                  <Image
+                    source={{ uri: loc.photo_url || DEFAULT_LOCATION_PHOTO }}
+                    style={styles.locThumb}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.locCardText}>
                     <Text style={styles.locName}>{loc.name}</Text>
                     {loc.address ? <Text style={styles.locAddress}>📍 {loc.address}</Text> : null}
                     {loc.description ? <Text style={styles.locDesc}>{loc.description}</Text> : null}
@@ -620,21 +766,9 @@ export default function ProfileScreen({ navigation, route }: any) {
         </ScrollView>
       ) : tab === 'info' ? (
         <ScrollView contentContainerStyle={[styles.infoContainer, { paddingBottom: insets.bottom + 90 }]}>
-          <InfoRow label="Username" value={`@${profile?.username}`} />
-          {profile?.person_name ? <InfoRow label="Name" value={profile.person_name} /> : null}
-          {profile?.business_name ? <InfoRow label="Business" value={profile.business_name} /> : null}
-          {profile?.location ? <InfoRow label="Location" value={profile.location} /> : null}
-          {profile?.zip_code ? <InfoRow label="Zip Code" value={profile.zip_code} /> : null}
-          {profile?.specialty ? <InfoRow label="Specialty" value={profile.specialty} /> : null}
-          {profile?.pricing_tier ? <InfoRow label="Pricing" value={profile.pricing_tier} /> : null}
-          {/* Show email on own profile always; on others only if public */}
-          {profile?.email && (!isViewingOther || profile.email_public)
-            ? <InfoRow label="Email" value={profile.email} />
-            : null}
-
-          {profile?.website &&
+          {(profile?.email || profile?.website) &&
             <Text style={styles.contactSectionLabel}>CONTACT</Text>}
-          {profile?.email && profile?.email_public && (
+          {profile?.email && (!isViewingOther || profile.email_public) && (
             <TouchableOpacity onPress={() => Linking.openURL(`mailto:${profile.email}`)}>
               <GlassPanel style={styles.contactRow}>
                 <Text style={styles.contactIcon}>✉️</Text>
@@ -697,6 +831,36 @@ export default function ProfileScreen({ navigation, route }: any) {
                   ) : null}
                 </View>
               </GlassPanel>
+            ))
+          )}
+        </ScrollView>
+      ) : tab === 'connections' ? (
+        <ScrollView contentContainerStyle={[styles.connectionsContainer, { paddingBottom: insets.bottom + 90 }]}>
+          {connections.length === 0 ? (
+            <GlassPanel style={styles.emptyEndorse}>
+              <Text style={styles.emptyEndorseText}>No connections yet.</Text>
+            </GlassPanel>
+          ) : (
+            connections.map(conn => (
+              <TouchableOpacity
+                key={conn.id}
+                onPress={() => navigation.push('Profile', { viewDeviceId: conn.device_id })}
+              >
+                <GlassPanel style={styles.connectionCard}>
+                  <View style={styles.connectionAvatar}>
+                    {conn.profile_pic
+                      ? <Image source={{ uri: conn.profile_pic }} style={styles.connectionAvatarImg} />
+                      : <Text style={styles.connectionUsername}>PIC</Text>}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    {conn.business_name
+                      ? <Text style={styles.connectionName}>{conn.business_name}</Text>
+                      : null}
+                    <Text style={styles.connectionUsername}>@{conn.username}</Text>
+                  </View>
+                  <Text style={styles.contactArrow}>›</Text>
+                </GlassPanel>
+              </TouchableOpacity>
             ))
           )}
         </ScrollView>
@@ -916,16 +1080,6 @@ const makeEStyles = (C: GlassColors) => StyleSheet.create({
   submitText: { color: '#fff', fontSize: Math.round(16 * C.textScale), fontWeight: '700' },
 });
 
-function InfoRow({ label, value }: { label: string; value: string }) {
-  const C = useColors();
-  const styles = useMemo(() => makeStyles(C), [C]);
-  return (
-    <GlassPanel style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </GlassPanel>
-  );
-}
 
 function Header({ navigation, onEdit, onEndorsements }: { navigation: any; onEdit?: () => void; onEndorsements?: () => void }) {
   const C = useColors();
@@ -981,24 +1135,50 @@ const makeStyles = (C: GlassColors) => StyleSheet.create({
   noProfileText: { fontSize: Math.round(26 * C.textScale), fontWeight: '700', color: C.text, marginBottom: 8, marginTop: 16 },
   subtext: { fontSize: Math.round(15 * C.textScale), color: C.textSub, textAlign: 'center', marginBottom: 28 },
 
-  identityRow: {
-    flexDirection: 'row', alignItems: 'center',
-    borderRadius: 18, paddingHorizontal: 18, paddingVertical: 16,
-    marginBottom: 10, gap: 16,
-  },
-  identityText: { flex: 1 },
+  // Hero banner styles
+  heroWrapper: { marginHorizontal: -14, marginBottom: 44 },
+  heroContainer: { height: 200, overflow: 'hidden' },
+  heroAvatarAnchor: { position: 'absolute', bottom: -40, left: 30, zIndex: 10 },
+  heroBanner: { width: '100%', height: 200 },
+  heroOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 60, backgroundColor: 'rgba(0,0,0,0.2)' },
+  avatarRow: { paddingHorizontal: 16 },
+  heroAvatarWrap: { width: 80, height: 80, borderRadius: 40, overflow: 'hidden', borderWidth: 3, borderColor: '#fff', backgroundColor: C.accentSubtle, marginTop: -40, marginBottom: 8 },
+  heroAvatar: { width: 80, height: 80 },
+  heroAvatarPlaceholder: { width: 80, height: 80, backgroundColor: C.accentSubtle, alignItems: 'center', justifyContent: 'center' },
+  heroAvatarLabel: { fontSize: Math.round(13 * C.textScale), color: C.textSub, fontWeight: '500' },
+
+  // Identity section below banner
+  identitySection: { paddingHorizontal: 16, paddingBottom: 8 },
+  identityTextBlock: {},
+  identityTopRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 4, gap: 12 },
+  identityAvatarSpacer: { width: 90 },
+  identityInfoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, marginBottom: 4 },
+  identityRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  identityTextCol: { flex: 1, justifyContent: 'center' },
+  identityPersonRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  identityPersonName: { fontSize: Math.round(16 * C.textScale), fontWeight: '600', color: C.text },
+  identityNamePriceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+  identityBusiness: { fontSize: Math.round(15 * C.textScale), fontWeight: '700', color: C.textSub, flexShrink: 1 },
+  identityPriceInline: { fontSize: Math.round(14 * C.textScale), fontWeight: '700', color: C.accent },
+  identityMeta: { fontSize: Math.round(13 * C.textScale), color: C.textMuted, marginBottom: 8 },
+  identityNameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginBottom: 2 },
+  identityUsername: { fontSize: Math.round(13 * C.textScale), color: C.textMuted },
+  identityName: { fontSize: Math.round(13 * C.textScale), color: C.textSub },
+  identityLocation: { fontSize: Math.round(13 * C.textScale), color: C.textSub, marginTop: 2 },
+  identityBadges: { flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' },
+  specialtyChip: { backgroundColor: C.accentSubtle, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderColor: C.accent },
+  specialtyChipText: { fontSize: Math.round(12 * C.textScale), color: C.accent, fontWeight: '600' },
+  pricingBadge: { backgroundColor: C.accentSubtle, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderColor: C.border },
+  pricingBadgeText: { fontSize: Math.round(12 * C.textScale), color: C.text, fontWeight: '700' },
+
+  // Legacy avatar styles (used in no-profile card and edit form)
   avatarCircle: {
     width: 72, height: 72, borderRadius: 36,
     borderWidth: 1.5, borderColor: C.border,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.1)',
   },
-  avatar: { width: 72, height: 72, borderRadius: 36 },
   avatarLabel: { fontSize: Math.round(16 * C.textScale), color: C.textMuted, fontWeight: '600' },
-  username: { fontSize: Math.round(18 * C.textScale), fontWeight: '700', color: C.text, marginBottom: 2 },
-  personName: { fontSize: Math.round(15 * C.textScale), color: C.textSub, marginBottom: 2 },
-  businessName: { fontSize: Math.round(14 * C.textScale), color: C.textSub, marginBottom: 2 },
-  locationText: { fontSize: Math.round(13 * C.textScale), color: C.textMuted, marginTop: 2 },
 
   tabBar: { flexDirection: 'row', borderRadius: 14, marginBottom: 10, overflow: 'hidden' },
   tabItem: { flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
@@ -1041,14 +1221,21 @@ const makeStyles = (C: GlassColors) => StyleSheet.create({
   saveBtn: { marginTop: 24 },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontSize: Math.round(15 * C.textScale), fontWeight: '700' },
-  cancelButton: { alignItems: 'center', marginTop: 14, paddingVertical: 10 },
-  cancelText: { color: C.textSub, fontSize: Math.round(15 * C.textScale) },
+  cancelButton: { alignItems: 'center', marginTop: 12, paddingVertical: 14, borderRadius: 14, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.accentSubtle },
+  cancelText: { color: C.textSub, fontSize: Math.round(15 * C.textScale), fontWeight: '600' },
 
   formContainer: { paddingHorizontal: 20, paddingBottom: 40 },
+  formBackBtn: { marginBottom: 8 },
+  formBackText: { color: C.accent, fontSize: Math.round(15 * C.textScale), fontWeight: '600' },
   formHeading: { fontSize: Math.round(22 * C.textScale), fontWeight: '700', color: C.text, marginBottom: 4 },
   label: { fontSize: Math.round(13 * C.textScale), fontWeight: '600', color: C.textSub, marginBottom: 6, marginTop: 14 },
   inputWrap: { borderRadius: 14 },
   input: { paddingHorizontal: 14, paddingVertical: 13, fontSize: Math.round(15 * C.textScale), color: C.text },
+  bannerPicker: { height: 130, borderRadius: 14, overflow: 'hidden', marginBottom: 4, backgroundColor: C.accentSubtle, borderWidth: 1, borderColor: C.border },
+  bannerPreview: { width: '100%', height: '100%' },
+  bannerPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  bannerEditBadge: { position: 'absolute', bottom: 8, right: 10, backgroundColor: C.accent, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
+  bannerEditBadgeText: { color: '#fff', fontSize: Math.round(12 * C.textScale), fontWeight: '700' },
   avatarPicker: { alignItems: 'center', marginTop: 4 },
   avatarPreview: { width: 100, height: 100, borderRadius: 50, marginBottom: 8 },
   avatarPlaceholder: {
@@ -1069,7 +1256,9 @@ const makeStyles = (C: GlassColors) => StyleSheet.create({
   addLocBtnText: { color: '#fff', fontSize: Math.round(15 * C.textScale), fontWeight: '700' },
   locCard: { borderRadius: 14, overflow: 'hidden' },
   locPhoto: { width: '100%', height: 140 },
-  locCardRow: { flexDirection: 'row', alignItems: 'flex-start', padding: 12 },
+  locThumb: { width: 64, height: 64, borderRadius: 10 },
+  locCardRow: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 12 },
+  locCardText: { flex: 1 },
   locName: { fontSize: Math.round(15 * C.textScale), fontWeight: '700', color: C.text, marginBottom: 3 },
   locAddress: { fontSize: Math.round(13 * C.textScale), color: C.textSub, marginBottom: 3 },
   locDesc: { fontSize: Math.round(13 * C.textScale), color: C.textMuted, lineHeight: 18 },
@@ -1115,6 +1304,20 @@ const makeStyles = (C: GlassColors) => StyleSheet.create({
   pricingChipActive: { backgroundColor: C.accent, borderColor: C.accent },
   pricingChipText: { fontSize: Math.round(15 * C.textScale), fontWeight: '700', color: C.textSub },
   pricingChipTextActive: { color: '#fff' },
+
+  // Connect button
+  connectBtn: { marginTop: 10, borderRadius: 20, paddingVertical: 8, paddingHorizontal: 20, borderWidth: 1.5, borderColor: C.accent, alignSelf: 'flex-start' },
+  connectBtnActive: { backgroundColor: C.accent },
+  connectBtnText: { fontSize: Math.round(13 * C.textScale), fontWeight: '700', color: C.accent },
+  connectBtnTextActive: { color: '#fff' },
+
+  // Connections tab
+  connectionsContainer: { paddingBottom: 32, gap: 8 },
+  connectionCard: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 16 },
+  connectionAvatar: { width: 48, height: 48, borderRadius: 24, overflow: 'hidden', backgroundColor: C.accentSubtle, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  connectionAvatarImg: { width: 48, height: 48 },
+  connectionName: { fontSize: Math.round(14 * C.textScale), fontWeight: '700', color: C.text },
+  connectionUsername: { fontSize: Math.round(12 * C.textScale), color: C.textMuted },
 
   // Store tab
   storeContainer: { paddingBottom: 32, gap: 10 },
